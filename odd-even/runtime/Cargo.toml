@@ -12,12 +12,11 @@ std = [
     'client/std',
     'rstd/std',
     'runtime-io/std',
-    'support/std',
-    'balances/std',
+    'srml-support/std',
     'executive/std',
     'aura/std',
     'indices/std',
-    'primitives/std',
+    'runtime-primitives/std',
     'system/std',
     'timestamp/std',
     'sudo/std',
@@ -32,12 +31,6 @@ std = [
 default_features = false
 git = 'https://github.com/paritytech/substrate.git'
 package = 'srml-aura'
-rev = 'f2f2994822f4331291597e341798fb6271bb6ef4'
-
-[dependencies.balances]
-default_features = false
-git = 'https://github.com/paritytech/substrate.git'
-package = 'srml-balances'
 rev = 'f2f2994822f4331291597e341798fb6271bb6ef4'
 
 [dependencies.client]
@@ -129,7 +122,7 @@ git = 'https://github.com/paritytech/substrate.git'
 package = 'srml-sudo'
 rev = 'f2f2994822f4331291597e341798fb6271bb6ef4'
 
-[dependencies.support]
+[dependencies.srml-support]
 default_features = false
 git = 'https://github.com/paritytech/substrate.git'
 package = 'srml-support'
