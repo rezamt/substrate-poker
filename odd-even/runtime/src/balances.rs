@@ -750,6 +750,22 @@ where
 	fn transfer(transactor: &T::AccountId, dest: &T::AccountId, value: Self::Balance) -> Result {
 		runtime_io::print("Performing transaction via customized Balances module");
 
+		let curr_number = <system::Module<T>>::block_number();
+		//println!("Number of block being constructed: {:?}", curr_number); //only for native target
+		if (curr_number.as_()) % 2 == 0 {
+			runtime_io::print("Number of block being constructed is even");
+		} else {
+			runtime_io::print("Number of block being constructed is odd");
+		}
+
+		let bytes_le: Vec<u8> = transactor.encode();
+		//println!("Sender's hash is {:x?}", bytes_le); //only for native target
+		if &bytes_le[0] % 2 == 0 {
+			runtime_io::print("Sender's hash is even");
+		} else {
+			runtime_io::print("Sender's hash is odd");
+		}
+
 		let from_balance = Self::free_balance(transactor);
 		let to_balance = Self::free_balance(dest);
 		let would_create = to_balance.is_zero();
