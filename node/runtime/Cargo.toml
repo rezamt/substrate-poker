@@ -1,7 +1,7 @@
 [package]
 authors = ['Parity Technologies <admin@parity.io>']
 edition = '2018'
-name = 'odd-even-runtime'
+name = 'poker-runtime'
 version = '1.0.0'
 
 [features]
@@ -12,11 +12,12 @@ std = [
     'client/std',
     'rstd/std',
     'runtime-io/std',
-    'srml-support/std',
+    'support/std',
+    'balances/std',
     'executive/std',
     'aura/std',
     'indices/std',
-    'runtime-primitives/std',
+    'primitives/std',
     'system/std',
     'timestamp/std',
     'sudo/std',
@@ -27,11 +28,16 @@ std = [
     'consensus-aura/std',
     'offchain-primitives/std',
 ]
-
 [dependencies.aura]
 default_features = false
 git = 'https://github.com/paritytech/substrate.git'
 package = 'srml-aura'
+rev = 'f2f2994822f4331291597e341798fb6271bb6ef4'
+
+[dependencies.balances]
+default_features = false
+git = 'https://github.com/paritytech/substrate.git'
+package = 'srml-balances'
 rev = 'f2f2994822f4331291597e341798fb6271bb6ef4'
 
 [dependencies.client]
@@ -123,7 +129,7 @@ git = 'https://github.com/paritytech/substrate.git'
 package = 'srml-sudo'
 rev = 'f2f2994822f4331291597e341798fb6271bb6ef4'
 
-[dependencies.srml-support]
+[dependencies.support]
 default_features = false
 git = 'https://github.com/paritytech/substrate.git'
 package = 'srml-support'

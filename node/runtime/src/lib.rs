@@ -32,9 +32,7 @@ pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
-pub use srml_support::{StorageValue, construct_runtime};
-
-mod balances;
+pub use support::{StorageValue, construct_runtime};
 
 /// The type that is used for identifying authorities.
 pub type AuthorityId = <AuthoritySignature as Verify>::Signer;
@@ -56,6 +54,9 @@ pub type BlockNumber = u64;
 
 /// Index of an account's extrinsic in the chain.
 pub type Nonce = u64;
+
+/// Used for the module poker in `./poker.rs`
+mod poker;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -92,7 +93,7 @@ pub mod opaque {
 /// This runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: create_runtime_str!("odd-even"),
-	impl_name: create_runtime_str!("odd-even-node"),
+	impl_name: create_runtime_str!("odd-even"),
 	authoring_version: 3,
 	spec_version: 3,
 	impl_version: 0,
@@ -186,6 +187,11 @@ impl sudo::Trait for Runtime {
 	type Proposal = Call;
 }
 
+/// Used for the module poker in `./poker.rs`
+impl poker::Trait for Runtime {
+	type Event = Event;
+}
+
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, AuthorityId, AuthoritySignature>) where
 		Block = Block,
@@ -199,6 +205,8 @@ construct_runtime!(
 		Indices: indices,
 		Balances: balances,
 		Sudo: sudo,
+		// Used for the module poker in `./poker.rs`
+		TemplateModule: poker::{Module, Call, Storage, Event<T>},
 	}
 );
 

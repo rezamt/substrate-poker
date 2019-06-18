@@ -1,4 +1,4 @@
-[dependencies.odd-even-runtime]
+[dependencies.poker-runtime]
 default-features = false
 path = '..'
 [profile.release]
@@ -8,7 +8,7 @@ panic = 'abort'
 [package]
 authors = ['Parity Technologies <admin@parity.io>']
 edition = '2018'
-name = 'odd-even-runtime-wasm'
+name = 'poker-runtime-wasm'
 version = '1.0.0'
 
 [workspace]
@@ -19,4 +19,4 @@ crate-type = ['cdylib']
 
 [features]
 default = []
-std = ['odd-even-runtime/std']
+std = ['poker-runtime/std']

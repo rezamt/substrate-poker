@@ -2,4 +2,4 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub use odd_even_runtime::*;
+pub use poker_runtime::*;

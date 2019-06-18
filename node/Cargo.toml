@@ -8,7 +8,7 @@ vergen = '3'
 authors = ['Parity Technologies <admin@parity.io>']
 build = 'build.rs'
 edition = '2018'
-name = 'odd-even'
+name = 'poker'
 version = '1.0.0'
 
 [dependencies]
@@ -46,7 +46,7 @@ git = 'https://github.com/paritytech/substrate.git'
 package = 'substrate-network'
 rev = 'f2f2994822f4331291597e341798fb6271bb6ef4'
 
-[dependencies.odd-even-runtime]
+[dependencies.poker-runtime]
 path = 'runtime'
 
 [dependencies.primitives]
@@ -80,5 +80,5 @@ package = 'substrate-transaction-pool'
 rev = 'f2f2994822f4331291597e341798fb6271bb6ef4'
 
 [[bin]]
-name = 'odd-even'
+name = 'poker'
 path = 'src/main.rs'

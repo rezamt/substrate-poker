@@ -1,9 +1,9 @@
 import express from 'express';
 
-const port = 8000;
+const port = %PORT%;
 let app = express();
 app.use(express.static('dist'));
 
 app.listen(port, () => {
-  console.log('Listening on port 8000');
+  console.log('Listening on port %PORT%');
 });

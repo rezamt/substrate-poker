@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use log::info;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
-use odd_even_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
+use poker_runtime::{self, GenesisConfig, opaque::Block, RuntimeApi};
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
@@ -24,9 +24,9 @@ pub use substrate_executor::NativeExecutor;
 // Our native executor instance.
 native_executor_instance!(
 	pub Executor,
-	odd_even_runtime::api::dispatch,
-	odd_even_runtime::native_version,
-	include_bytes!("../runtime/wasm/target/wasm32-unknown-unknown/release/odd_even_runtime_wasm.compact.wasm")
+	poker_runtime::api::dispatch,
+	poker_runtime::native_version,
+	include_bytes!("../runtime/wasm/target/wasm32-unknown-unknown/release/poker_runtime_wasm.compact.wasm")
 );
 
 #[derive(Default)]
