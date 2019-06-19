@@ -6,7 +6,9 @@ if cargo --version | grep -q "nightly"; then
 else
 	CARGO_CMD="cargo +nightly"
 fi
-$CARGO_CMD build --target=wasm32-unknown-unknown --release
+
+echo "Compiling with '$1' flag"
+$CARGO_CMD build $1 --target=wasm32-unknown-unknown
 for i in poker_runtime_wasm
 do
 	wasm-gc target/wasm32-unknown-unknown/release/$i.wasm target/wasm32-unknown-unknown/release/$i.compact.wasm

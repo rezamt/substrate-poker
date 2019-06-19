@@ -5,6 +5,9 @@ import {App} from './app.jsx';
 import { setNodeUri } from 'oo7-substrate'
 require('./denominations')
 
+import 'babel-polyfill'
+import './events.js'
+
 setNodeUri(['ws://127.0.0.1:%PORT%'])
 
 render(<App/>, document.getElementById('app'));

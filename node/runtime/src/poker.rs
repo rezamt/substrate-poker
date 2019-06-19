@@ -1,47 +1,48 @@
-/// For more guidance on Substrate modules, see the example module
-/// https://github.com/paritytech/substrate/blob/master/srml/example/src/lib.rs
-
-use support::{decl_module, decl_storage, decl_event, StorageValue, dispatch::Result};
+use support::{decl_module, decl_storage, decl_event, StorageValue};
+use support::dispatch::Result;
+use support::traits::Currency;
 use system::ensure_signed;
 
-/// The module's configuration trait.
-pub trait Trait: system::Trait {
-	// TODO: Add other types and constants required configure this module.
+use core::debug_assert;
 
-	/// The overarching event type.
+use runtime_io;
+
+pub trait Trait: system::Trait + balances::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-/// This module's storage items.
 decl_storage! {
-	trait Store for Module<T: Trait> as TemplateModule {
-		// Just a dummy storage item. 
-		// Here we are declaring a StorageValue, `Something` as a Option<u32>
-		// `get(something)` is the default getter which returns either the stored `u32` or `None` if nothing stored
-		Something get(something): Option<u32>;
+	trait Store for Module<T: Trait> as Poker {
+		//maximum 2 players currently
+		Dealer get(dealer): Option<T::AccountId>;
+		Player get(player): Option<T::AccountId>;
 	}
 }
 
 decl_module! {
-	/// The module declaration.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		// Initializing events
-		// this is needed only if you are using events in your module
 		fn deposit_event<T>() = default;
 
-		// Just a dummy entry point.
-		// function that can be called by the external world as an extrinsics call
-		// takes a parameter of the type `AccountId`, stores it and emits an event
-		pub fn do_something(origin, something: u32) -> Result {
-			// TODO: You only need this if you want to check it was signed.
+		fn join_game(origin) -> Result {
 			let who = ensure_signed(origin)?;
 
-			// TODO: Code to execute when something calls this.
-			// For example: the following line stores the passed in u32 in the storage
-			<Something<T>>::put(something);
+			let dealer = <Dealer<T>>::get();
+			let player = <Player<T>>::get();
+			if dealer.is_none() {
+				debug_assert!(player.is_none()); //1st player is always dealer
+				runtime_io::print("Dealer joins the game, waiting for a player...");
 
-			// here we are raising the Something event
-			Self::deposit_event(RawEvent::SomethingStored(something, who));
+				<Dealer<T>>::put(who.clone());
+				Self::deposit_event(RawEvent::DealerJoined(who));
+			} else if player.is_none() {
+				runtime_io::print("Player joins the game! It's gonna be hot!");
+
+				<Player<T>>::put(who.clone());
+				Self::deposit_event(RawEvent::PlayerJoined(who));
+			} else {
+				runtime_io::print("Sorry man, no room.");
+			}
+
 			Ok(())
 		}
 	}
@@ -49,10 +50,8 @@ decl_module! {
 
 decl_event!(
 	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
-		// Just a dummy event.
-		// Event `Something` is declared with a parameter of the type `u32` and `AccountId`
-		// To emit this event, we call the deposit funtion, from our runtime funtions
-		SomethingStored(u32, AccountId),
+		DealerJoined(AccountId),
+		PlayerJoined(AccountId),
 	}
 );
 

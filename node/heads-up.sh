@@ -4,7 +4,7 @@ cargo run -- \
   --chain=local \
   --alice \
   --port 30333 \
-  --ws-port 9944 \
+  --ws-port 9944 --ws-external \
   --node-key 0000000000000000000000000000000000000000000000000000000000000001 \
   --telemetry-url ws://telemetry.polkadot.io:1024 \
   --validator &> alice.log &
@@ -17,7 +17,7 @@ cargo run -- \
   --chain=local \
   --bob \
   --port 30334 \
-  --ws-port 9945 \
+  --ws-port 9945 --ws-external \
   --telemetry-url ws://telemetry.polkadot.io:1024 \
   --validator &> bob.log &
 

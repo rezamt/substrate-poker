@@ -13,9 +13,7 @@ import { BalanceBond } from './BalanceBond.jsx';
 import { InputBond } from './InputBond.jsx';
 import { TransactButton } from './TransactButton.jsx';
 import { FileUploadBond } from './FileUploadBond.jsx';
-import { StakingStatusLabel } from './StakingStatusLabel';
 import { WalletList, SecretItem } from './WalletList';
-import { AddressBookList } from './AddressBookList';
 import { TransformBondButton } from './TransformBondButton';
 import { Pretty } from './Pretty';
 
@@ -37,18 +35,54 @@ export class App extends ReactiveComponent {
 	readyRender() {
 		return (<div>
 			<Heading />
-			<WalletSegment />
-			<Divider hidden />
-			<AddressBookSegment />
-			<Divider hidden />
+			<GameSegment />
 			<FundingSegment />
+			<Divider hidden />
+			<WalletSegment />
 			<Divider hidden />
 			<UpgradeSegment />
 			<Divider hidden />
 			<PokeSegment />
 			<Divider hidden />
-			<TransactionsSegment />
 		</div>);
+	}
+}
+
+class GameSegment extends React.Component {
+	constructor () {
+		super()
+		this.player = new Bond
+	}
+
+	render () {
+		return <Segment style={{margin: '1em'}} padded>
+			<Header as='h2'>
+				<Icon name='send' />
+				<Header.Content>
+					Blockchain Poker
+					<Header.Subheader>Play poker via blockchain</Header.Subheader>
+				</Header.Content>
+			</Header>
+			<div style={{ paddingBottom: '1em' }}>
+				<div style={{ fontSize: 'small' }}>player</div>
+				<SignerBond bond={this.player} />
+				<If condition={this.player.ready()} then={<span>
+					<Label>Balance
+						<Label.Detail>
+						  <Pretty value={runtime.balances.balance(this.player)} />
+						</Label.Detail>
+					</Label>
+				</span>} />
+			</div>
+			<div style={{paddingBottom: '1em'}}>
+				<TransactButton tx={{
+					sender: runtime.indices.tryIndex(this.player),
+					call: calls.poker.joinGame(),
+					compact: false,
+					longevity: true
+				}} content="Join" icon="sign in" />
+			</div>
+		</Segment>
 	}
 }
 
@@ -133,70 +167,6 @@ class WalletSegment extends React.Component {
 			</div>
 			<div style={{ paddingBottom: '1em' }}>
 				<WalletList />
-			</div>
-		</Segment>
-	}
-}
-
-class AddressBookSegment extends React.Component {
-	constructor() {
-		super()
-		this.nick = new Bond
-		this.lookup = new Bond
-	}
-	render() {
-		return <Segment style={{ margin: '1em' }} padded>
-			<Header as='h2'>
-				<Icon name='search' />
-				<Header.Content>
-					Address Book
-					<Header.Subheader>Inspect the status of any account and name it for later use</Header.Subheader>
-				</Header.Content>
-			</Header>
-			<div style={{ paddingBottom: '1em' }}>
-				<div style={{ fontSize: 'small' }}>lookup account</div>
-				<AccountIdBond bond={this.lookup} />
-				<If condition={this.lookup.ready()} then={<div>
-					<Label>Balance
-						<Label.Detail>
-							<Pretty value={runtime.balances.balance(this.lookup)} />
-						</Label.Detail>
-					</Label>
-					<Label>Nonce
-						<Label.Detail>
-							<Pretty value={runtime.system.accountNonce(this.lookup)} />
-						</Label.Detail>
-					</Label>
-					<If condition={runtime.indices.tryIndex(this.lookup, null).map(x => x !== null)} then={
-						<Label>Short-form
-							<Label.Detail>
-								<Rspan>{runtime.indices.tryIndex(this.lookup).map(i => ss58Encode(i) + ` (index ${i})`)}</Rspan>
-							</Label.Detail>
-						</Label>
-					} />
-					<Label>Address
-						<Label.Detail>
-							<Pretty value={this.lookup} />
-						</Label.Detail>
-					</Label>
-				</div>} />
-			</div>
-			<div style={{ paddingBottom: '1em' }}>
-				<div style={{ fontSize: 'small' }}>name</div>
-				<InputBond
-					bond={this.nick}
-					placeholder='A name for this address'
-					validator={n => n ? addressBook().map(ss => ss.byName[n] ? null : n) : null}
-					action={<TransformBondButton
-						content='Add'
-						transform={(name, account) => { addressBook().submit(account, name); return true }}
-						args={[this.nick, this.lookup]}
-						immediate
-					/>}
-				/>
-			</div>
-			<div style={{ paddingBottom: '1em' }}>
-				<AddressBookList />
 			</div>
 		</Segment>
 	}
@@ -331,32 +301,5 @@ class PokeSegment extends React.Component {
 				/>
 			</Segment>
 		}/>		
-	}
-}
-
-class TransactionsSegment extends React.Component {
-	constructor () {
-		super()
-
-		this.txhex = new Bond
-	}
-
-	render () {
-		return <Segment style={{margin: '1em'}} padded>
-			<Header as='h2'>
-				<Icon name='certificate' />
-				<Header.Content>
-					Transactions
-					<Header.Subheader>Send custom transactions</Header.Subheader>
-				</Header.Content>
-			</Header>
-			<div style={{paddingBottom: '1em'}}>
-				<div style={{paddingBottom: '1em'}}>
-					<div style={{fontSize: 'small'}}>Custom Transaction Data</div>
-					<InputBond bond={this.txhex}/>
-				</div>
-				<TransactButton tx={this.txhex.map(hexToBytes)} content="Publish" icon="sign in" />
-			</div>
-		</Segment>
 	}
 }

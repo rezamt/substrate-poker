@@ -12,12 +12,19 @@ normal=$(tput sgr0)
 # Save current directory.
 pushd . >/dev/null
 
+if [ "$1" = "--debug" ]
+then
+    FLAG=""
+else
+    FLAG="--release"
+fi
+
 for SRC in runtime/wasm
 do
   echo "${bold}Building webassembly binary in $SRC...${normal}"
   cd "$PROJECT_ROOT/$SRC"
 
-  ./build.sh
+  ./build.sh $FLAG
 
   cd - >> /dev/null
 done

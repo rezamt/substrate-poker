@@ -1,3 +1,8 @@
 alice
 bob
+
 */node_modules
+*/.idea
+
+*.log
+*.pid

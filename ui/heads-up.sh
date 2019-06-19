@@ -13,13 +13,13 @@ sed -i s/%PORT%/8001/g bob/server.js
 sed -i s/%PORT%/9945/g bob/src/index.js
 
 cd alice
-ln -s docs dist
+rm -f dist && ln -s docs dist
 yarn run dev &> ../alice.log &
 echo $! > ../alice.pid
 cd -
 
 cd bob
-ln -s docs dist
+rm -f dist && ln -s docs dist
 yarn run dev &> ../bob.log &
 echo $! > ../bob.pid
 cd -

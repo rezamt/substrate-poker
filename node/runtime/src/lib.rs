@@ -206,7 +206,7 @@ construct_runtime!(
 		Balances: balances,
 		Sudo: sudo,
 		// Used for the module poker in `./poker.rs`
-		TemplateModule: poker::{Module, Call, Storage, Event<T>},
+		Poker: poker::{Module, Call, Storage, Event<T>},
 	}
 );
 
