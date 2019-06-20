@@ -1,9 +1,5 @@
 # Blockchain Poker UI
 
-Run `./heads-up.sh` for installing dependencies and running two instances of UI which look at each own's node.\
-(One for Alice and one for Bob)
+Run `yarn install` for installing dependencies and then `yarn run dev`.
 
-
-After this, open `localhost:8000` and `localhost:8001` with your favorite browser.
-
-You can check status of launched processes with `./status.sh`.
+After this, open `localhost:8000` in several tabs (one for each player) with your favorite browser.

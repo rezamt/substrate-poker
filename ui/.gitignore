@@ -1,8 +1,8 @@
 alice
 bob
 
-*/node_modules
-*/.idea
+node_modules
+.idea
 
 *.log
 *.pid
