@@ -1,20 +1,13 @@
 import React from 'react';
 require('semantic-ui-css/semantic.min.css');
-import { Icon, Accordion, List, Checkbox, Label, Header, Segment, Divider, Button } from 'semantic-ui-react';
-import { Bond, TransformBond } from 'oo7';
-import { ReactiveComponent, If, Rspan } from 'oo7-react';
-import {
-    calls, runtime, chain, system, runtimeUp, ss58Decode, ss58Encode, pretty,
-    addressBook, secretStore, metadata, nodeService, bytesToHex, hexToBytes, AccountId
-} from 'oo7-substrate';
-import Identicon from 'polkadot-identicon';
-import { AccountIdBond, SignerBond } from './AccountIdBond.jsx';
-import { BalanceBond } from './BalanceBond.jsx';
-import { InputBond } from './InputBond.jsx';
+
+import { Icon, Label, Header, Segment, Button } from 'semantic-ui-react';
+import { Bond } from 'oo7';
+import { If } from 'oo7-react';
+import { calls, runtime } from 'oo7-substrate';
+import { Identicon } from 'polkadot-identicon';
+import { SignerBond } from './AccountIdBond.jsx';
 import { TransactButton } from './TransactButton.jsx';
-import { FileUploadBond } from './FileUploadBond.jsx';
-import { WalletList, SecretItem } from './WalletList';
-import { TransformBondButton } from './TransformBondButton';
 import { Pretty } from './Pretty';
 
 const bufEq = require('arraybuffer-equal');
@@ -62,7 +55,7 @@ export class GameSegment extends React.Component {
     }
 
     render () {
-        return <Segment style={{margin: '1em'}} padded>
+        return <Segment style={{ margin: '1em' }} padded>
             <Header as='h2'>
                 <Icon name='send' />
                 <Header.Content>
@@ -75,7 +68,7 @@ export class GameSegment extends React.Component {
                 <If condition={this.loggedOut} then={<span>
                     <div style={{ fontSize: 'small' }}>Please input account information:</div>
                     <SignerBond bond={this.user} onKeyDown={this.logInKeyPressHandler}/>
-					<div style={{paddingTop: '1em'}}>
+					<div style={{ paddingTop: '1em' }}>
                         <If condition={this.user.ready()} then={
                             <Button onClick={this.logIn} content="Log in" icon="sign in" color="orange"/>
                         } else={
@@ -86,32 +79,25 @@ export class GameSegment extends React.Component {
 
 				{/* User logged in */}
                 <If condition={this.loggedIn} then={<span>
-                    <Label>Logged in as
-                        <Label.Detail>
-                            <Pretty value={this.user} />
-                        </Label.Detail>
-                    </Label>
-					<Label>Balance
-						<Label.Detail>
-						  <Pretty value={runtime.balances.balance(this.user)} />
-						</Label.Detail>
-					</Label>
+                    <If condition={this.dealerIsHere} then={<div>
+                        { this.displayMember("dealer", this.dealer, this.isDealer) }
+                        <If condition={this.playerIsHere} then={<div>
+                            { this.displayMember("player", this.player, this.isPlayer) }
+                            <p />
 
-                    <If condition={this.dealerIsHere} then={<span>
-                        <If condition={this.playerIsHere} then={
                             <If condition={this.isJoined} then={
-                                <Label color="blue">Good luck and have fun.</Label>
+                                this.displayStatus("Good luck and have fun.")
                             } else={
-                                <Label color="blue">Sorry, at the moment here are only two chairs...</Label>
+                                this.displayStatus("Sorry, at the moment here are only two chairs...")
                             }/>
-                        } else={
+                        </div>} else={
                             <If condition={this.isJoined} then={
-                                <Label color="blue">You are waiting at the table...</Label>
+                                this.displayStatus("You are waiting at the table...")
                             } else={<span>
-                                <Label color="blue">One person is waiting at the table.</Label>
+                                { this.displayStatus("One person is waiting at the table.") }
 
                                 {/* JOIN */}
-                                <div style={{paddingBottom: '1em'}}>
+                                <div style={{ paddingTop: '1em' }}>
                                     <TransactButton tx={{
                                         sender: runtime.indices.tryIndex(this.user),
                                         call: calls.poker.joinGame(),
@@ -122,11 +108,12 @@ export class GameSegment extends React.Component {
                                 </div>
                             </span>}/>
                         }/>
-                    </span>} else={<span>
-                        <Label color="blue">The is nobody in the room.</Label>
+                    </div>} else={<span>
+                        { this.displayLoginMessage() }
+                        { this.displayStatus("There is nobody in the room.") }
 
                         {/* INIT */}
-                        <div style={{paddingBottom: '1em'}}>
+                        <div style={{ paddingTop: '1em' }}>
                             <TransactButton tx={{
                                 sender: runtime.indices.tryIndex(this.user),
                                 call: calls.poker.joinGame(),
@@ -137,12 +124,56 @@ export class GameSegment extends React.Component {
                         </div>
                         </span>}/>
 
-					<div style={{paddingTop: '1em'}}>
+					<div style={{ paddingTop: '1em' }}>
 						<Button onClick={this.logOut} content="Log out" icon="sign in" color="orange" />
 					</div>
 				</span>} />
             </div>
         </Segment>
+    }
+
+    displayStatus (status) {
+        return <div style={{ paddingTop: '1em' }}>
+            <Label color="blue">
+                { status }
+            </Label>
+        </div>;
+    }
+
+    displayLoginMessage () {
+        return <div>
+            <Label>Logged in as
+                <Label.Detail>
+                    <Pretty value={this.user} />
+                </Label.Detail>
+            </Label>
+            <Label>Balance
+                <Label.Detail>
+                    <Pretty value={runtime.balances.balance(this.user)} />
+                </Label.Detail>
+            </Label>
+        </div>;
+    }
+
+    displayMember (role, member, predicate) {
+        return <div>
+            <If condition={role === "dealer"} then={
+                <Label color="red"><Pretty value="Dealer" /></Label>
+            } else={
+                <Label color="blue"><Pretty value="Player" /></Label>
+            } />
+
+            {/*<Identicon size='24' account={member} />*/}
+            <Label color="olive">
+                <Pretty value={member.map(account =>
+                    runtime.indices.ss58Encode(runtime.indices.tryIndex(account))
+                )} />
+            </Label>
+            <Pretty value={member} />
+            <If condition={predicate} then={
+                <Label color="yellow">You</Label>
+            } />
+        </div>;
     }
 
     logInKeyPressHandler (event) {
@@ -151,3 +182,10 @@ export class GameSegment extends React.Component {
         }
     }
 }
+
+//todo:
+//1. Try to use `bonds.me`, see this doc for details: https://wiki.parity.io/oo7-Parity-Examples
+
+// const {} = require('oo7-react');
+// const {} = require('oo7-parity');
+// const {AccountLabel} = require('parity-reactive-ui');
