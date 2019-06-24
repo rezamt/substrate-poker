@@ -1,11 +1,15 @@
-use support::{decl_module, decl_storage, decl_event, StorageValue};
+use support::{decl_module, decl_storage, decl_event, StorageValue, StorageMap};
 use support::dispatch::Result;
 use support::traits::Currency;
 use system::ensure_signed;
 
-use core::debug_assert;
+use rstd::prelude::*;
 
+use core::debug_assert;
 use runtime_io;
+
+use crate::cards::*;
+use crate::naive_rsa::*;
 
 pub trait Trait: system::Trait + balances::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -13,9 +17,12 @@ pub trait Trait: system::Trait + balances::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Poker {
-		//maximum 2 players currently
+		///Maximum 2 players currently
 		Dealer get(dealer): Option<T::AccountId>;
 		Player get(player): Option<T::AccountId>;
+
+		HandKeys get(hand_keys): map T::AccountId => Vec<u8>;
+		HandCards get(hand_cards): map T::AccountId => Vec<u8>;
 	}
 }
 
@@ -42,6 +49,25 @@ decl_module! {
 			} else {
 				runtime_io::print("Sorry man, no room.");
 			}
+
+			Ok(())
+		}
+
+		fn deal_hand(origin, key: Vec<u8>) -> Result {
+			debug_assert!(key.len() == 32);
+
+			let who = ensure_signed(origin)?;
+			runtime_io::print("Registering hand-key");
+
+			//for debug purposes
+			<HandKeys<T>>::insert(who.clone(), key.clone());
+
+			let card1 = Card { nominal: A, suit: SPADES };
+			let card2 = Card { nominal: 10, suit: CLUBS };
+
+			let cards = encode(&vec![card1, card2][..]);
+			let encrypted = encrypt(&cards[..], &key[..]);
+			<HandCards<T>>::insert(who, encrypted);
 
 			Ok(())
 		}

@@ -11,6 +11,7 @@ import { TransactButton } from './TransactButton.jsx';
 import { Pretty } from './Pretty';
 
 const bufEq = require('arraybuffer-equal');
+const NodeRSA = require('node-rsa');
 
 function accountsEqualAndNotNull(left, right) {
     return left != null && right != null
@@ -44,6 +45,8 @@ export class GameSegment extends React.Component {
         this.isJoined = this.isDealer.map(d =>
             this.isPlayer.map(p =>
                 d || p));
+
+        this.handKey = null;
     }
 
     logIn () {
@@ -52,6 +55,22 @@ export class GameSegment extends React.Component {
 
     logOut () {
         game.loggedIn.changed(false)
+    }
+
+    generateHandKey () {
+        this.handKey = new NodeRSA({b: 256}, 'components', 'browser');
+        const size = this.handKey.getKeySize();
+        const components = this.handKey.exportKey('components');
+
+        var debugBytes = "";
+        for(var i=0; i < components.n.byteLength; i++) {
+            debugBytes = debugBytes.concat(components.n[i].toString());
+            debugBytes = debugBytes.concat(",");
+        }
+
+        console.log(`Public key of size ${size}: exp = ${components.e}, n = ${debugBytes}`);
+        console.assert(components.e === 65537);
+        return components.n.subarray(1);
     }
 
     render () {
@@ -79,6 +98,16 @@ export class GameSegment extends React.Component {
 
 				{/* User logged in */}
                 <If condition={this.loggedIn} then={<span>
+
+                    <TransactButton
+                        content="deal cards"
+                        icon='game'
+                        tx={{
+                            sender: this.user,
+                            call: calls.poker.dealHand(this.generateHandKey())
+                        }}
+                    />
+
                     <If condition={this.dealerIsHere} then={<div>
                         { this.displayMember("dealer", this.dealer, this.isDealer) }
                         <If condition={this.playerIsHere} then={<div>
