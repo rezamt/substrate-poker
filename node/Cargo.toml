@@ -11,6 +11,13 @@ edition = '2018'
 name = 'poker'
 version = '1.0.0'
 
+[[bin]]
+name = 'poker'
+path = 'src/main.rs'
+
+[workspace]
+members = [ "runtime" ]
+
 [dependencies]
 error-chain = '0.12'
 exit-future = '0.1'
@@ -78,7 +85,3 @@ rev = 'f2f2994822f4331291597e341798fb6271bb6ef4'
 git = 'https://github.com/paritytech/substrate.git'
 package = 'substrate-transaction-pool'
 rev = 'f2f2994822f4331291597e341798fb6271bb6ef4'
-
-[[bin]]
-name = 'poker'
-path = 'src/main.rs'

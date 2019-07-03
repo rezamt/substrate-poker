@@ -1,6 +1,8 @@
 import React from 'react';
 require('semantic-ui-css/semantic.min.css');
 
+import { U256 } from '@polkadot/types';
+
 import { Icon, Label, Header, Segment, Button } from 'semantic-ui-react';
 import { Bond } from 'oo7';
 import { If } from 'oo7-react';
@@ -46,7 +48,8 @@ export class GameSegment extends React.Component {
             this.isPlayer.map(p =>
                 d || p));
 
-        this.handKey = null;
+        this.handKey = null; //todo bond
+        this.cards = runtime.poker
     }
 
     logIn () {
@@ -67,9 +70,10 @@ export class GameSegment extends React.Component {
             debugBytes = debugBytes.concat(components.n[i].toString());
             debugBytes = debugBytes.concat(",");
         }
-
         console.log(`Public key of size ${size}: exp = ${components.e}, n = ${debugBytes}`);
+
         console.assert(components.e === 65537);
+        console.log(`U256: ${new U256(components.n.subarray(1))}`);
         return components.n.subarray(1);
     }
 
@@ -98,25 +102,19 @@ export class GameSegment extends React.Component {
 
 				{/* User logged in */}
                 <If condition={this.loggedIn} then={<span>
-
-                    <TransactButton
-                        content="deal cards"
-                        icon='game'
-                        tx={{
-                            sender: this.user,
-                            call: calls.poker.dealHand(this.generateHandKey())
-                        }}
-                    />
-
-                    <If condition={this.dealerIsHere} then={<div>
+                    <If condition={this.dealerIsHere} then={<div style={{ paddingTop: '1em' }}>
                         { this.displayMember("dealer", this.dealer, this.isDealer) }
                         <If condition={this.playerIsHere} then={<div>
                             { this.displayMember("player", this.player, this.isPlayer) }
                             <p />
 
-                            <If condition={this.isJoined} then={
-                                this.displayStatus("Good luck and have fun.")
-                            } else={
+                            <If condition={this.isJoined} then={<span>
+                                <TransactButton content="deal cards" icon='game' tx={{
+                                    sender: this.user,
+                                    call: calls.poker.dealHand(this.generateHandKey())
+                                }}/>
+                                {this.displayStatus("Good luck and have fun.")}
+                            </span>} else={
                                 this.displayStatus("Sorry, at the moment here are only two chairs...")
                             }/>
                         </div>} else={
@@ -193,12 +191,12 @@ export class GameSegment extends React.Component {
             } />
 
             {/*<Identicon size='24' account={member} />*/}
-            <Label color="olive">
+            <Label>
                 <Pretty value={member.map(account =>
                     runtime.indices.ss58Encode(runtime.indices.tryIndex(account))
                 )} />
             </Label>
-            <Pretty value={member} />
+            {/*<Pretty value={member} />*/}
             <If condition={predicate} then={
                 <Label color="yellow">You</Label>
             } />
