@@ -57,25 +57,30 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 			debug_assert!(key.len() == 32);
 
-			//keys received have big-endian order of bytes
-			let mut key = key.clone();
-			key.reverse();
+			if !<HandKeys<T>>::get(who.clone()).is_empty() ||
+			   !<HandCards<T>>::get(who.clone()).is_empty() {
+			    Err("For current hand the state is already initialized")
+			} else {
+				//keys received have big-endian order of bytes
+				let mut key = key.clone();
+				key.reverse();
 
-			<HandKeys<T>>::insert(who.clone(), key.clone());
+				<HandKeys<T>>::insert(who.clone(), key.clone());
 
-			runtime_io::print("Dealing cards for a player");
+				runtime_io::print("Dealing cards for a player");
 
-			let card1 = Card { nominal: A, suit: SPADES };
-			let card2 = Card { nominal: 10, suit: CLUBS };
+				let card1 = Card { nominal: A, suit: SPADES };
+				let card2 = Card { nominal: 10, suit: CLUBS };
 
-			let cards = encode(&vec![card1, card2][..]);
+				let cards = encode(&vec![card1, card2][..]);
 
-			match encrypt(&cards[..],&key[..]) {
-			    Ok(cards) => {
-					<HandCards<T>>::insert(who, cards);
-					Ok(())
-			    },
-			    Err(msg) => Err(msg),
+				match encrypt(&cards[..],&key[..]) {
+					Ok(cards) => {
+						<HandCards<T>>::insert(who, cards);
+						Ok(())
+					},
+					Err(msg) => Err(msg),
+				}
 			}
 		}
 	}

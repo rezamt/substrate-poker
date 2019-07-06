@@ -1,7 +1,7 @@
 {
   "name": "substrate-ui",
   "version": "1.0.0",
-  "description": "Gav's Substrate UI",
+  "description": "Blockchain Poker UI, based on Gav's Substrate UI",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

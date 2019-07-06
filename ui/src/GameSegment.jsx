@@ -1,21 +1,25 @@
 import React from 'react';
 require('semantic-ui-css/semantic.min.css');
 
-import { U256 } from '@polkadot/types';
-
 import { Icon, Label, Header, Segment, Button } from 'semantic-ui-react';
 import { Bond } from 'oo7';
 import { If } from 'oo7-react';
+import { pretty } from 'oo7-substrate';
 import { calls, runtime } from 'oo7-substrate';
 import { Identicon } from 'polkadot-identicon';
 import { SignerBond } from './AccountIdBond.jsx';
 import { TransactButton } from './TransactButton.jsx';
 import { Pretty } from './Pretty';
 
+import { decode, decrypt } from './cards.js';
+
 const bufEq = require('arraybuffer-equal');
 const NodeRSA = require('node-rsa');
 
-function accountsEqualAndNotNull(left, right) {
+const MODULUS_STORAGE_KEY = 'blockchain_poker_hand_key_modulus';
+const EXPONENT_STORAGE_KEY = 'blockchain_poker_hand_key_exponent';
+
+function accountsAreEqualAndNotNull(left, right) {
     return left != null && right != null
         && bufEq(left.buffer, right.buffer);
 }
@@ -27,54 +31,114 @@ export class GameSegment extends React.Component {
         window.game = this;
 
         this.user = new Bond;
-        this.loggedIn = (new Bond).default(false);
-        this.loggedOut = this.loggedIn.map(flag => !flag);
+        this.isLoggedIn = (new Bond).default(false);
+        this.isLoggedOut = this.isLoggedIn.map(flag => !flag);
 
-        this.dealer = runtime.poker.dealer.defaultTo(null);
-        this.player = runtime.poker.player.defaultTo(null);
+        this.dealer = runtime.poker.dealer; //.defaultTo(null);
+        this.player = runtime.poker.player; //.defaultTo(null);
 
-        this.dealerIsHere = this.dealer.map(d => d != null);
-        this.playerIsHere = this.player.map(p => p != null);
+        this.dealerIsJoined = this.dealer.map(d => d != null);
+        this.playerIsJoined = this.player.map(p => p != null);
 
         this.isDealer = this.dealer.map(d =>
             this.user.map(u =>
-                accountsEqualAndNotNull(d, u)));
+                accountsAreEqualAndNotNull(d, u)));
 
         this.isPlayer = this.player.map(p =>
             this.user.map(u =>
-                accountsEqualAndNotNull(p, u)));
+                accountsAreEqualAndNotNull(p, u)));
 
         this.isJoined = this.isDealer.map(d =>
             this.isPlayer.map(p =>
                 d || p));
 
-        this.handKey = null; //todo bond
-        this.cards = runtime.poker
+        this.handKey = new Bond();
+
+        this.handCards = runtime.poker.handCards(game.user);
+        this.handCardsAreDealt = this.handCards.map(encrypted => encrypted.length !== 0);
+
+        this.isJoined.tie(joined => {
+            this.isLoggedIn.then(logged => {
+                if (joined && logged) {
+                    this.handCardsAreDealt.then(dealt => console.assert(!dealt));
+                    console.log("Joined the game");
+                    game.generateHandKey();
+                }
+            });
+        })
     }
 
     logIn () {
-        game.loggedIn.changed(true)
+        game.isLoggedIn.changed(true);
+        game.isJoined.then(joined => {
+           if (joined) {
+               console.log("Resuming to the game");
+               game.handCardsAreDealt.then(dealt => {
+                   if (dealt) {
+                       game.loadHandKey();
+                   } else {
+                       game.generateHandKey();
+                   }
+               })
+           }
+        });
     }
 
     logOut () {
-        game.loggedIn.changed(false)
+        game.isLoggedIn.changed(false);
+    }
+
+    logInKeyPressHandler (event) {
+        if (event.key === "Enter" && game.user.isReady()) {
+            game.logIn();
+        }
+    }
+
+    modulusField () {
+        this.user.then(account => console.log(MODULUS_STORAGE_KEY + pretty(account)));
+        return MODULUS_STORAGE_KEY + pretty(this.user._value);
+    }
+
+    exponentField () {
+        this.user.then(account => console.log(EXPONENT_STORAGE_KEY + pretty(account)));
+        return EXPONENT_STORAGE_KEY + pretty(this.user._value);
+    }
+
+    clearHandKey () {
+        console.log("Clearing hand key");
+        console.assert(this.user.isReady());
+        localStorage.setItem(game.modulusField(), "");
+        localStorage.setItem(game.exponentField(), "");
+        this.handKey.reset();
+    }
+
+    loadHandKey () {
+        console.log("Loading hand key");
+        let modulus = localStorage.getItem(game.modulusField());
+        let exponent = localStorage.getItem(game.exponentField());
+        if (modulus !== "" && exponent !== "") {
+            this.handKey.changed({
+                modulus: Buffer.from(modulus, 'hex'),
+                exponent: Buffer.from(exponent, 'hex')
+            });
+        } else {
+            this.handKey.reset();
+        }
     }
 
     generateHandKey () {
-        this.handKey = new NodeRSA({b: 256}, 'components', 'browser');
-        const size = this.handKey.getKeySize();
-        const components = this.handKey.exportKey('components');
+        console.log("Generating hand key");
+        const key = new NodeRSA({b: 256}, 'components', 'browser');
 
-        var debugBytes = "";
-        for(var i=0; i < components.n.byteLength; i++) {
-            debugBytes = debugBytes.concat(components.n[i].toString());
-            debugBytes = debugBytes.concat(",");
-        }
-        console.log(`Public key of size ${size}: exp = ${components.e}, n = ${debugBytes}`);
-
+        const components = key.exportKey('components');
         console.assert(components.e === 65537);
-        console.log(`U256: ${new U256(components.n.subarray(1))}`);
-        return components.n.subarray(1);
+
+        const modulus = components.n.subarray(1);
+        const exponent = components.d;
+
+        localStorage.setItem(game.modulusField(), Buffer.from(modulus).toString('hex'));
+        localStorage.setItem(game.exponentField(), Buffer.from(exponent).toString('hex'));
+        this.handKey.changed({modulus: modulus, exponent: exponent});
     }
 
     render () {
@@ -88,7 +152,7 @@ export class GameSegment extends React.Component {
             </Header>
             <div>
                 {/* Logging in */}
-                <If condition={this.loggedOut} then={<span>
+                <If condition={this.isLoggedOut} then={<span>
                     <div style={{ fontSize: 'small' }}>Please input account information:</div>
                     <SignerBond bond={this.user} onKeyDown={this.logInKeyPressHandler}/>
 					<div style={{ paddingTop: '1em' }}>
@@ -101,20 +165,23 @@ export class GameSegment extends React.Component {
 				</span>} />
 
 				{/* User logged in */}
-                <If condition={this.loggedIn} then={<span>
-                    <If condition={this.dealerIsHere} then={<div style={{ paddingTop: '1em' }}>
+                <If condition={this.isLoggedIn} then={<span>
+                    <If condition={this.dealerIsJoined} then={<div style={{ paddingTop: '1em' }}>
                         { this.displayMember("dealer", this.dealer, this.isDealer) }
-                        <If condition={this.playerIsHere} then={<div>
+                        <If condition={this.playerIsJoined} then={<div>
                             { this.displayMember("player", this.player, this.isPlayer) }
                             <p />
 
-                            <If condition={this.isJoined} then={<span>
-                                <TransactButton content="deal cards" icon='game' tx={{
-                                    sender: this.user,
-                                    call: calls.poker.dealHand(this.generateHandKey())
-                                }}/>
-                                {this.displayStatus("Good luck and have fun.")}
-                            </span>} else={
+                            <If condition={this.isJoined} then={
+                                <If condition={this.handCardsAreDealt} then={this.displayHandCards()}
+                                    else={<span>
+                                        <TransactButton content="deal cards" icon='game' tx={{
+                                            sender: this.user,
+                                            call: calls.poker.dealHand(this.handKey.map(key => key.modulus))
+                                        }}/>
+                                        {this.displayStatus("Good luck and have fun.")}
+                                </span>}/>
+                            } else={
                                 this.displayStatus("Sorry, at the moment here are only two chairs...")
                             }/>
                         </div>} else={
@@ -126,7 +193,7 @@ export class GameSegment extends React.Component {
                                 {/* JOIN */}
                                 <div style={{ paddingTop: '1em' }}>
                                     <TransactButton tx={{
-                                        sender: runtime.indices.tryIndex(this.user),
+                                        sender: this.user,
                                         call: calls.poker.joinGame(),
                                         compact: false,
                                         longevity: true
@@ -203,10 +270,11 @@ export class GameSegment extends React.Component {
         </div>;
     }
 
-    logInKeyPressHandler (event) {
-        if (event.key === "Enter" && game.user.isReady()) {
-            game.logIn();
-        }
+    displayHandCards () {
+        return <Pretty value={this.handCards.map(encrypted =>
+            this.handKey.map(key =>
+                decode(decrypt(encrypted, key.modulus, key.exponent)))
+        )}/>;
     }
 }
 
