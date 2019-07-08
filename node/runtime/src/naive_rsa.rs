@@ -51,7 +51,7 @@ fn modular_exponentiation(mut base: U256, mut exponent: U256, modulus: U256) -> 
 mod tests {
     use super::*;
 
-    //modulus
+    //public modulus
     const PUBLIC_KEY: [u8; 32] = [159, 152, 51, 63, 56, 236, 171, 124, 45, 135, 54, 162, 205, 236, 198, 245, 19, 46, 53, 100, 118, 84, 91, 52, 154, 205, 76, 225, 199, 53, 134, 136];
 
     //private exponent

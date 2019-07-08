@@ -11,7 +11,8 @@ import { SignerBond } from './AccountIdBond.jsx';
 import { TransactButton } from './TransactButton.jsx';
 import { Pretty } from './Pretty';
 
-import { decode, decrypt } from './cards.js';
+import { decode } from './cards.js';
+import { decrypt } from './naive_rsa.js';
 
 const bufEq = require('arraybuffer-equal');
 const NodeRSA = require('node-rsa');
@@ -27,7 +28,6 @@ function accountsAreEqualAndNotNull(left, right) {
 export class GameSegment extends React.Component {
     constructor () {
         super();
-
         window.game = this;
 
         this.user = new Bond;
@@ -116,11 +116,14 @@ export class GameSegment extends React.Component {
         console.log("Loading hand key");
         let modulus = localStorage.getItem(game.modulusField());
         let exponent = localStorage.getItem(game.exponentField());
+
         if (modulus !== "" && exponent !== "") {
-            this.handKey.changed({
-                modulus: Buffer.from(modulus, 'hex'),
-                exponent: Buffer.from(exponent, 'hex')
-            });
+            modulus = Buffer.from(modulus, 'hex');
+            exponent = Buffer.from(exponent, 'hex');
+            console.assert(modulus.length === 32, "public key must consist of 32 bytes");
+            console.assert(exponent.length === 32, "private key must consist of 32 bytes");
+
+            this.handKey.changed({ modulus: modulus, exponent: exponent });
         } else {
             this.handKey.reset();
         }
@@ -133,8 +136,11 @@ export class GameSegment extends React.Component {
         const components = key.exportKey('components');
         console.assert(components.e === 65537);
 
-        const modulus = components.n.subarray(1);
-        const exponent = components.d;
+        //keys are stored in little-endian format
+        const modulus = components.n.slice(-32).reverse();
+        const exponent = components.d.slice(-32).reverse();
+        console.assert(modulus.length === 32, "public key must consist of 32 bytes");
+        console.assert(exponent.length === 32, "private key must consist of 32 bytes");
 
         localStorage.setItem(game.modulusField(), Buffer.from(modulus).toString('hex'));
         localStorage.setItem(game.exponentField(), Buffer.from(exponent).toString('hex'));
@@ -272,9 +278,10 @@ export class GameSegment extends React.Component {
 
     displayHandCards () {
         return <Pretty value={this.handCards.map(encrypted =>
-            this.handKey.map(key =>
-                decode(decrypt(encrypted, key.modulus, key.exponent)))
-        )}/>;
+            this.handKey.map(key => {
+                let decrypted = decrypt(encrypted, key.modulus, key.exponent);
+                return decode(decrypted);
+            }))}/>;
     }
 }
 

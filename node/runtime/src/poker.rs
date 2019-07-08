@@ -61,10 +61,7 @@ decl_module! {
 			   !<HandCards<T>>::get(who.clone()).is_empty() {
 			    Err("For current hand the state is already initialized")
 			} else {
-				//keys received have big-endian order of bytes
-				let mut key = key.clone();
-				key.reverse();
-
+				//keys are received in big-endian format
 				<HandKeys<T>>::insert(who.clone(), key.clone());
 
 				runtime_io::print("Dealing cards for a player");
