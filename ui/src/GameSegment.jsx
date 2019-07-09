@@ -10,8 +10,9 @@ import { Identicon } from 'polkadot-identicon';
 import { SignerBond } from './AccountIdBond.jsx';
 import { TransactButton } from './TransactButton.jsx';
 import { Pretty } from './Pretty';
+import { SvgRow } from './SvgRow';
 
-import { decode } from './cards.js';
+import { decode, image } from './cards.js';
 import { decrypt } from './naive_rsa.js';
 
 const bufEq = require('arraybuffer-equal');
@@ -277,11 +278,14 @@ export class GameSegment extends React.Component {
     }
 
     displayHandCards () {
-        return <Pretty value={this.handCards.map(encrypted =>
-            this.handKey.map(key => {
-                let decrypted = decrypt(encrypted, key.modulus, key.exponent);
-                return decode(decrypted);
-            }))}/>;
+        return SvgRow("hand",
+            this.handCards.map(encrypted =>
+                this.handKey.map(key => {
+                    let decrypted = decrypt(encrypted, key.modulus, key.exponent);
+                    let cards = decode(decrypted);
+                    return cards.map(image);
+                }))
+        );
     }
 }
 

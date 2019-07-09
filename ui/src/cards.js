@@ -1,3 +1,5 @@
+import React from 'react';
+
 const J = 11;
 const Q = 12;
 const K = 13;
@@ -11,28 +13,29 @@ const SPADES   = 1;
 export function decode (bytes) {
     let n = bytes.length;
     console.assert(n % 2 === 0);
-
     return [...Array(n / 2).keys()]
-        .map(i => {
-            let nominal = decodeNominal(bytes[i * 2]);
-            let suit = decodeSuit(bytes[i * 2 + 1]);
-            return `${nominal} of ${suit}`;
-        })
-        .join(" & ");
+        .map(i => { return {
+            nominal: bytes[i * 2],
+            suit: bytes[i * 2 + 1]
+        }});
 }
 
-function decodeNominal (byte) {
+export function image (card) {
+    return `cards/${suit(card.suit)}/${nominal(card.nominal)}.svg`;
+}
+
+function nominal (byte) {
     console.assert(byte <= 13);
-    if (byte === J) { return "Jack"; }
-    if (byte === Q) { return "Queen"; }
-    if (byte === K) { return "King"; }
-    if (byte === A) { return "Ace"; }
+    if (byte === J) { return "J"; }
+    if (byte === Q) { return "Q"; }
+    if (byte === K) { return "K"; }
+    if (byte === A) { return "A"; }
     return byte.toString();
 }
 
-function decodeSuit (byte) {
-    if (byte === HEARTS)   { return "Hearts"; }
-    if (byte === CLUBS)    { return "Clubs"; }
-    if (byte === DIAMONDS) { return "Diamons"; }
-    if (byte === SPADES)   { return "Spades"; }
+function suit (byte) {
+    if (byte === HEARTS)   { return "hearts"; }
+    if (byte === CLUBS)    { return "clubs"; }
+    if (byte === DIAMONDS) { return "diamonds"; }
+    if (byte === SPADES)   { return "spades"; }
 }
