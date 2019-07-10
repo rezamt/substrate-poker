@@ -7,6 +7,8 @@
 /// This implementation is adapted version of https://github.com/getreu/rustlang-play-rsa
 
 use core::str;
+use core::convert::TryFrom;
+
 use rstd::result;
 use rstd::prelude::*;
 use primitives::U256;
@@ -38,9 +40,9 @@ fn modular_exponentiation(mut base: U256, mut exponent: U256, modulus: U256) -> 
 
     while exponent > U256::zero() {
         if (exponent & U256::one()) == U256::one() {
-            result = U256::from(result.full_mul(base) % modulus);
+            result = U256::try_from(result.full_mul(base) % modulus).unwrap();
         }
-        base = U256::from(base.full_mul(base) % modulus);
+        base = U256::try_from(base.full_mul(base) % modulus).unwrap();
 
         exponent = exponent >> 1;
     }
