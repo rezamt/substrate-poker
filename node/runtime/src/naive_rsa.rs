@@ -69,11 +69,11 @@ mod tests {
         let exponent: U256 = U256::from_little_endian(privkey);
         generic_crypter(data, pubkey, exponent)
             .map(|mut bytes: Vec<u8>| {
-                let mut end = bytes.len() - 1;
-                while end >= 0 && bytes[end] == 0 {
+                let mut end = bytes.len() as isize - 1;
+                while end >= 0 && bytes[end as usize] == 0 {
                     end -= 1;
                 }
-                bytes.truncate(end + 1);
+                bytes.truncate((end + 1) as usize);
                 bytes
             })
     }

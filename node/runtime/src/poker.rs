@@ -8,7 +8,10 @@ use rstd::prelude::*;
 use core::debug_assert;
 use runtime_io;
 
-use crate::cards::*;
+use runtime_primitives::traits::Hash;
+use parity_codec::Encode;
+
+use crate::cards;
 use crate::naive_rsa::*;
 
 pub trait Trait: system::Trait + balances::Trait {
@@ -66,12 +69,19 @@ decl_module! {
 
 				runtime_io::print("Dealing cards for a player");
 
-				let card1 = Card { nominal: A, suit: SPADES };
-				let card2 = Card { nominal: 10, suit: CLUBS };
+				//this is fake random for my proof-of-concept
+				//in future, it has to be replaced with off-chain random generation
+				//also it probably can be workarounded with sendind a nonce from the player
+				let random_bytes: Vec<u8> = (<system::Module<T>>::random_seed(), &who, &key)
+					.using_encoded(<T as system::Trait>::Hashing::hash)
+					.using_encoded(|x| x.to_vec()); //32 bytes
 
-				let cards = encode(&vec![card1, card2][..]);
+				let card1 = cards::from_random(&random_bytes[0..2]);
+				let card2 = cards::from_random(&random_bytes[2..4]);
 
-				match encrypt(&cards[..],&key[..]) {
+				let cards = cards::encode(&vec![card1, card2][..]);
+
+				match encrypt(&cards[..], &key[..]) {
 					Ok(cards) => {
 						<HandCards<T>>::insert(who, cards);
 						Ok(())

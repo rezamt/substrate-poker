@@ -1,11 +1,5 @@
 # Blockchain Poker Node
 
-After building, run `./heads-up.sh` for running two nodes, one for Alice and one for Bob.
-
-You can check status of launched processes with `./status.sh`.
-
-# Building
-
 Install Rust:
 
 ```bash
@@ -21,11 +15,15 @@ Install required tools:
 Build the WebAssembly binary:
 
 ```bash
-./scripts/build.sh
+./scripts/build.sh --release
 ```
 
 Build all native code:
 
 ```bash
-cargo build
+cargo build --release
 ```
+
+# Tests
+
+You can run tests with `cargo test --all`
