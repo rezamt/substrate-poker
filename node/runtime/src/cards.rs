@@ -47,8 +47,8 @@ pub fn spades(n: Nominal) -> Card {
     Card { nominal: n, suit: SPADES }
 }
 
-pub fn encode(cards: &[Card]) -> Vec<u8> {
-    cards.iter()
+pub fn encode(cards: Vec<&Card>) -> Vec<u8> {
+    cards.into_iter()
         .map(|card| {
             card.validate();
             vec![card.nominal, card.suit]
@@ -57,11 +57,15 @@ pub fn encode(cards: &[Card]) -> Vec<u8> {
         .collect()
 }
 
-//a bit unfair random generation, see the test
-pub fn from_random(bytes: &[u8]) -> Card {
+//a bit unfair random generation, because 16 % 13 != 0
+pub fn from_random(byte: u8) -> Card {
+    let high = byte >> 4;
+    let low  = byte & 15;
+    debug_assert!(byte == low + high * 16);
+
     let card = Card {
-        nominal: bytes[0] % 13 + 1,
-        suit: bytes[1] % 4 + 1,
+        nominal: high % 13 + 1,
+        suit: low % 4 + 1,
     };
 
     card.validate();
@@ -74,21 +78,17 @@ mod tests {
 
     #[test]
     fn generate_from_random() {
-        assert!(from_random(&[1, 0]) == spades(2));
-        assert!(from_random(&[14, 0]) == spades(2));
-        assert!(from_random(&[142, 6]) == clubs(K));
+        assert!(from_random(3) == diamonds(A));
+        assert!(from_random(16) == spades(2));
+        assert!(from_random(211) == diamonds(A));
+        assert!(from_random(224) == spades(2));
 
-        assert!(from_random(&[0, 7]) == diamonds(A));
-        assert!(from_random(&[247, 7]) == diamonds(A));
-        assert!(from_random(&[248, 7]) == diamonds(2));
-        assert!(from_random(&[255, 7]) == diamonds(9));
-        //this means that 10, J, Q, K are less frequent
+        assert!(from_random(0  << 4) == spades(A));
+        assert!(from_random(12 << 4) == spades(K));
 
-        assert!(from_random(&[255, 0]) == spades(9));
-        assert!(from_random(&[255, 252]) == spades(9));
-        assert!(from_random(&[255, 253]) == hearts(9));
-        assert!(from_random(&[255, 254]) == clubs(9));
-        assert!(from_random(&[255, 255]) == diamonds(9));
-        //for suits, it is fair
+        assert!(from_random(13 << 4) == spades(A));
+        assert!(from_random(14 << 4) == spades(2));
+        assert!(from_random(15 << 4) == spades(3));
+        //this means that A, 2 and 3 are a bit more frequent
     }
 }

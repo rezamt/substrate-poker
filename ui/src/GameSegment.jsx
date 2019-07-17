@@ -4,7 +4,6 @@ require('semantic-ui-css/semantic.min.css');
 import { Icon, Label, Header, Segment, Button } from 'semantic-ui-react';
 import { Bond } from 'oo7';
 import { If } from 'oo7-react';
-import { pretty } from 'oo7-substrate';
 import { calls, runtime } from 'oo7-substrate';
 import { Identicon } from 'polkadot-identicon';
 import { SignerBond } from './AccountIdBond.jsx';
@@ -15,11 +14,9 @@ import { SvgRow } from './SvgRow';
 import { decode, image } from './cards.js';
 import { decrypt } from './naive_rsa.js';
 
-const bufEq = require('arraybuffer-equal');
-const NodeRSA = require('node-rsa');
+const keys = require('./keys.js');
 
-const MODULUS_STORAGE_KEY = 'blockchain_poker_hand_key_modulus';
-const EXPONENT_STORAGE_KEY = 'blockchain_poker_hand_key_exponent';
+const bufEq = require('arraybuffer-equal');
 
 function accountsAreEqualAndNotNull(left, right) {
     return left != null && right != null
@@ -30,6 +27,7 @@ export class GameSegment extends React.Component {
     constructor () {
         super();
         window.game = this;
+        window.keys = keys;
 
         this.user = new Bond;
         this.isLoggedIn = (new Bond).default(false);
@@ -54,6 +52,9 @@ export class GameSegment extends React.Component {
                 d || p));
 
         this.handKey = new Bond();
+        this.flopKey = new Bond();
+        this.turnKey = new Bond();
+        this.riverKey = new Bond();
 
         this.handCards = runtime.poker.handCards(game.user);
         this.handCardsAreDealt = this.handCards.map(encrypted => encrypted.length !== 0);
@@ -63,7 +64,7 @@ export class GameSegment extends React.Component {
                 if (joined && logged) {
                     this.handCardsAreDealt.then(dealt => console.assert(!dealt));
                     console.log("Joined the game");
-                    game.generateHandKey();
+                    keys.generate();
                 }
             });
         })
@@ -76,9 +77,9 @@ export class GameSegment extends React.Component {
                console.log("Resuming to the game");
                game.handCardsAreDealt.then(dealt => {
                    if (dealt) {
-                       game.loadHandKey();
+                       keys.load();
                    } else {
-                       game.generateHandKey();
+                       keys.generate();
                    }
                })
            }
@@ -93,59 +94,6 @@ export class GameSegment extends React.Component {
         if (event.key === "Enter" && game.user.isReady()) {
             game.logIn();
         }
-    }
-
-    modulusField () {
-        this.user.then(account => console.log(MODULUS_STORAGE_KEY + pretty(account)));
-        return MODULUS_STORAGE_KEY + pretty(this.user._value);
-    }
-
-    exponentField () {
-        this.user.then(account => console.log(EXPONENT_STORAGE_KEY + pretty(account)));
-        return EXPONENT_STORAGE_KEY + pretty(this.user._value);
-    }
-
-    clearHandKey () {
-        console.log("Clearing hand key");
-        console.assert(this.user.isReady());
-        localStorage.setItem(game.modulusField(), "");
-        localStorage.setItem(game.exponentField(), "");
-        this.handKey.reset();
-    }
-
-    loadHandKey () {
-        console.log("Loading hand key");
-        let modulus = localStorage.getItem(game.modulusField());
-        let exponent = localStorage.getItem(game.exponentField());
-
-        if (modulus !== "" && exponent !== "") {
-            modulus = Buffer.from(modulus, 'hex');
-            exponent = Buffer.from(exponent, 'hex');
-            console.assert(modulus.length === 32, "public key must consist of 32 bytes");
-            console.assert(exponent.length === 32, "private key must consist of 32 bytes");
-
-            this.handKey.changed({ modulus: modulus, exponent: exponent });
-        } else {
-            this.handKey.reset();
-        }
-    }
-
-    generateHandKey () {
-        console.log("Generating hand key");
-        const key = new NodeRSA({b: 256}, 'components', 'browser');
-
-        const components = key.exportKey('components');
-        console.assert(components.e === 65537);
-
-        //keys are stored in little-endian format
-        const modulus = components.n.slice(-32).reverse();
-        const exponent = components.d.slice(-32).reverse();
-        console.assert(modulus.length === 32, "public key must consist of 32 bytes");
-        console.assert(exponent.length === 32, "private key must consist of 32 bytes");
-
-        localStorage.setItem(game.modulusField(), Buffer.from(modulus).toString('hex'));
-        localStorage.setItem(game.exponentField(), Buffer.from(exponent).toString('hex'));
-        this.handKey.changed({modulus: modulus, exponent: exponent});
     }
 
     render () {
@@ -184,7 +132,11 @@ export class GameSegment extends React.Component {
                                     else={<span>
                                         <TransactButton content="deal cards" icon='game' tx={{
                                             sender: this.user,
-                                            call: calls.poker.dealHand(this.handKey.map(key => key.modulus))
+                                            call: calls.poker.preflop(
+                                                keys.hand.map(key => key.modulus),
+                                                keys.flop.map(key => key.modulus),
+                                                keys.turn.map(key => key.modulus),
+                                                keys.river.map(key => key.modulus))
                                         }}/>
                                         {this.displayStatus("Good luck and have fun.")}
                                 </span>}/>
@@ -280,7 +232,7 @@ export class GameSegment extends React.Component {
     displayHandCards () {
         return SvgRow("hand",
             this.handCards.map(encrypted =>
-                this.handKey.map(key => {
+                keys.hand.map(key => {
                     let decrypted = decrypt(encrypted, key.modulus, key.exponent);
                     let cards = decode(decrypted);
                     return cards.map(image);
