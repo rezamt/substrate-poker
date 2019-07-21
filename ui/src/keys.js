@@ -1,6 +1,8 @@
 import {pretty} from "oo7-substrate";
 import { Bond } from 'oo7';
 
+import {STAGES, NAMES} from './stage.js';
+
 const NodeRSA = require('node-rsa');
 
 export const hand = new Bond();
@@ -8,32 +10,25 @@ export const flop = new Bond();
 export const turn = new Bond();
 export const river = new Bond();
 
-export const NAME_TO_BOND = new Map([
-    ['hand', hand],
-    ['flop', flop],
-    ['turn', turn],
-    ['river', river]
-]);
+export let BONDS = [hand, flop, turn, river];
 
 export function generate () {
-    for (let entry of NAME_TO_BOND) {
-        generateKeyPair(entry[0], entry[1]);
+    for (let stage of STAGES) {
+        generateKeyPair(NAMES[stage], BONDS[stage]);
     }
 }
 
 export function load () {
-    for (let entry of NAME_TO_BOND) {
-        console.log(entry[0]);
-        console.log(entry[1]);
-        loadKeyIntoBond(entry[0], entry[1]);
+    for (let stage of STAGES) {
+        loadKeyIntoBond(NAMES[stage], BONDS[stage]);
     }
 }
 
 export function clear () {
     console.assert(game.user.isReady());
-    NAME_TO_BOND.forEach((field, bond) => {
-        clearStorage(field);
-        bond.reset();
+    STAGES.forEach(stage => {
+        clearStorage(NAMES[stage]);
+        BONDS[stage].reset();
     });
 }
 

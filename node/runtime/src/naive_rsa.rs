@@ -18,6 +18,19 @@ pub fn encrypt(data: &[u8], pubkey: &[u8]) -> Result {
     generic_crypter(data, pubkey, exponent)
 }
 
+pub fn decrypt(data: &[u8], pubkey: &[u8], privkey: &[u8]) -> Result {
+    let exponent: U256 = U256::from_little_endian(privkey);
+    generic_crypter(data, pubkey, exponent)
+        .map(|mut bytes: Vec<u8>| {
+            let mut end = bytes.len() as isize - 1;
+            while end >= 0 && bytes[end as usize] == 0 {
+                end -= 1;
+            }
+            bytes.truncate((end + 1) as usize);
+            bytes
+        })
+}
+
 fn generic_crypter(data: &[u8], pubkey: &[u8], exponent: U256) -> Result {
     if data.len() > 32 {
         Err("Encryption algorithm works only with messages of length <= 32 bytes")
@@ -52,10 +65,20 @@ mod tests {
     use super::*;
 
     //public modulus
-    const PUBLIC_KEY: [u8; 32] = [159, 152, 51, 63, 56, 236, 171, 124, 45, 135, 54, 162, 205, 236, 198, 245, 19, 46, 53, 100, 118, 84, 91, 52, 154, 205, 76, 225, 199, 53, 134, 136];
+    const PUBLIC_KEY: [u8; 32] = [
+        159, 152, 51, 63, 56, 236, 171, 124,
+        45, 135, 54, 162, 205, 236, 198, 245,
+        19, 46, 53, 100, 118, 84, 91, 52,
+        154, 205, 76, 225, 199, 53, 134, 136
+    ];
 
     //private exponent
-    const PRIVATE_KEY: [u8; 32] = [25, 179, 118, 205, 152, 40, 219, 84, 40, 144, 120, 121, 145, 37, 130, 26, 36, 45, 66, 62, 172, 151, 163, 62, 196, 188, 207, 172, 93, 93, 87, 81];
+    const PRIVATE_KEY: [u8; 32] = [
+        25, 179, 118, 205, 152, 40, 219, 84,
+        40, 144, 120, 121, 145, 37, 130, 26,
+        36, 45, 66, 62, 172, 151, 163, 62,
+        196, 188, 207, 172, 93, 93, 87, 81
+    ];
 
     #[test]
     fn composition_is_identity() {
@@ -63,18 +86,5 @@ mod tests {
         let encrypted = encrypt(message, &PUBLIC_KEY).unwrap();
         let decrypted = decrypt(&encrypted, &PUBLIC_KEY, &PRIVATE_KEY).unwrap();
         assert!(decrypted == message);
-    }
-
-    fn decrypt(data: &[u8], pubkey: &[u8], privkey: &[u8]) -> Result {
-        let exponent: U256 = U256::from_little_endian(privkey);
-        generic_crypter(data, pubkey, exponent)
-            .map(|mut bytes: Vec<u8>| {
-                let mut end = bytes.len() as isize - 1;
-                while end >= 0 && bytes[end as usize] == 0 {
-                    end -= 1;
-                }
-                bytes.truncate((end + 1) as usize);
-                bytes
-            })
     }
 }

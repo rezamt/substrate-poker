@@ -59,6 +59,7 @@ pub type Nonce = u64;
 mod keys;
 mod naive_rsa;
 mod cards;
+mod stage;
 mod poker;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know

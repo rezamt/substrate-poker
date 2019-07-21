@@ -1,4 +1,9 @@
-use crate::{cards, keys, naive_rsa};
+use crate::{
+	stage::{self, StageId},
+	naive_rsa,
+	cards,
+	keys,
+};
 
 use support::{decl_module, decl_storage, decl_event, StorageValue, StorageMap};
 use support::dispatch::Result;
@@ -19,19 +24,23 @@ pub trait Trait: system::Trait + balances::Trait {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Poker {
+		Stage get(stage): u32;
+
 		///Maximum 2 players currently
 		Dealer get(dealer): Option<T::AccountId>;
 		Player get(player): Option<T::AccountId>;
 
 		Keys get(keys): map T::AccountId => keys::PublicStorage;
+		Secrets get(secrets): map T::AccountId => keys::RevealedSecrets;
 
 		HandCards get(hand_cards): map T::AccountId => Vec<u8>;
+		SharedCards get(shared_cards): Vec<u8>;
 
-		//Shared cards are stored as tuples: left side for encrypted
-		//and right becomes non-empty after revealing left side
-		FlopCards get(flop_cards): (Vec<u8>, Vec<u8>);
-		TurnCards get(turn_cards): (Vec<u8>, Vec<u8>);
-		RiverCards get(river_cards): (Vec<u8>, Vec<u8>);
+		//Shared cards are hidden and revealed by-stage when all
+		//players submit their secret keys for corresponding stages
+		FlopCards get(flop_cards): Vec<u8>;
+		TurnCards get(turn_cards): Vec<u8>;
+		RiverCards get(river_cards): Vec<u8>;
 	}
 }
 
@@ -67,23 +76,24 @@ decl_module! {
 				flop_key: Vec<u8>,
 				turn_key: Vec<u8>,
 				river_key: Vec<u8>) -> Result {
-			//All keys are received in big-endian format
 			let who = ensure_signed(origin)?;
 
-			let keys = keys::PublicStorage {
-				hand: hand_key,
-				flop: flop_key,
-				turn: turn_key,
-				river: river_key
-			};
-
-			debug_assert!(keys.is_valid());
-
 			if <Keys<T>>::get(&who).is_initialized() {
-				Err("For current round the state is already initialized")
+				Err("For current round, preflop stage is already initialized")
 			} else {
-				runtime_io::print("Registering participant's keys for this round");
+				runtime_io::print("Registering participant's keys for preflop stage");
+
+				//All keys are received in big-endian format
+				let keys = keys::PublicStorage {
+					hand: hand_key,
+					flop: flop_key,
+					turn: turn_key,
+					river: river_key
+				};
+
+				debug_assert!(keys.is_valid());
 				<Keys<T>>::insert(&who, &keys);
+
 
 				let dealer = <Dealer<T>>::get().unwrap();
 				let player = <Player<T>>::get().unwrap();
@@ -130,19 +140,77 @@ decl_module! {
 
 					let flop_cards = naive_rsa::encrypt(&flop_cards[..], &player_keys.flop[..])?;
 					let flop_cards = naive_rsa::encrypt(&flop_cards[..], &dealer_keys.flop[..])?;
-					<FlopCards<T>>::put((flop_cards, vec![]));
+					<FlopCards<T>>::put(flop_cards);
 
 					let turn_cards = naive_rsa::encrypt(&turn_cards[..], &player_keys.turn[..])?;
 					let turn_cards = naive_rsa::encrypt(&turn_cards[..], &dealer_keys.turn[..])?;
-					<TurnCards<T>>::put((turn_cards, vec![]));
+					<TurnCards<T>>::put(turn_cards);
 
 					let river_cards = naive_rsa::encrypt(&river_cards[..], &player_keys.river[..])?;
 					let river_cards = naive_rsa::encrypt(&river_cards[..], &dealer_keys.river[..])?;
-					<RiverCards<T>>::put((river_cards, vec![]));
+					<RiverCards<T>>::put(river_cards);
 
+					<Stage<T>>::put(stage::PREFLOP);
 					Ok(())
 				} else {
-					runtime_io::print("Waiting for other participants to deal cards");
+					runtime_io::print("Waiting for other participants to deal hand cards");
+					Ok(())
+				}
+			}
+		}
+
+		fn next_stage(origin, stage_secret: Vec<u8>) -> Result {
+			let who = ensure_signed(origin)?;
+			let stage = <Stage<T>>::get() + 1;
+
+			if <Secrets<T>>::get(&who).retrieve(stage).is_some() {
+				Err("The next stage is already initialized for this player")
+			} else {
+				runtime_io::print("Registering participant's keys for the next stage");
+
+				let mut secrets = <Secrets<T>>::get(&who);
+				secrets.submit(stage, stage_secret);
+				debug_assert!(secrets.is_valid());
+				<Secrets<T>>::insert(&who, &secrets);
+
+				let dealer = <Dealer<T>>::get().unwrap();
+				let player = <Player<T>>::get().unwrap();
+
+				let dealer_secret = <Secrets<T>>::get(&dealer).retrieve(stage);
+				let player_secret = <Secrets<T>>::get(&player).retrieve(stage);
+
+				if dealer_secret.is_some() && player_secret.is_some() {
+					runtime_io::print("Revealing cards of the next stage");
+					let dealer_secret = dealer_secret.unwrap();
+					let player_secret = player_secret.unwrap();
+
+					let dealer_key = <Keys<T>>::get(&dealer).retrieve(stage);
+					let player_key = <Keys<T>>::get(&player).retrieve(stage);
+
+					let hidden = match stage {
+						stage::FLOP  => <FlopCards<T>>::get(),
+						stage::TURN  => <TurnCards<T>>::get(),
+						stage::RIVER => <RiverCards<T>>::get(),
+
+						_ => unreachable!()
+					};
+
+					let revealed = naive_rsa::decrypt(&hidden, &dealer_key[..], &dealer_secret[..])?;
+					let mut revealed = naive_rsa::decrypt(&revealed, &player_key[..], &player_secret[..])?;
+
+					let mut shared_cards = <SharedCards<T>>::get();
+					shared_cards.append(&mut revealed);
+					<SharedCards<T>>::put(shared_cards);
+
+					<Stage<T>>::put(stage);
+					Ok(())
+				} else {
+					//Technically, if we use commutative encryption, then we can
+					//remove one layer of encryption after each player submits his secret
+					//for current stage. Also we can do it in current implementation
+					//after receiving dealer's secret (because his secret is last of applied),
+					//but for simplicity we wait for all in PoC
+					runtime_io::print("Waiting for other participants to deal next stage");
 					Ok(())
 				}
 			}

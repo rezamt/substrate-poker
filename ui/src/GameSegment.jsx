@@ -11,12 +11,12 @@ import { TransactButton } from './TransactButton.jsx';
 import { Pretty } from './Pretty';
 import { SvgRow } from './SvgRow';
 
+const bufEq = require('arraybuffer-equal');
+
 import { decode, image } from './cards.js';
 import { decrypt } from './naive_rsa.js';
-
+import { BONDS } from './keys.js';
 const keys = require('./keys.js');
-
-const bufEq = require('arraybuffer-equal');
 
 function accountsAreEqualAndNotNull(left, right) {
     return left != null && right != null
@@ -28,13 +28,14 @@ export class GameSegment extends React.Component {
         super();
         window.game = this;
         window.keys = keys;
+        window.bonds = BONDS;
 
         this.user = new Bond;
         this.isLoggedIn = (new Bond).default(false);
         this.isLoggedOut = this.isLoggedIn.map(flag => !flag);
 
-        this.dealer = runtime.poker.dealer; //.defaultTo(null);
-        this.player = runtime.poker.player; //.defaultTo(null);
+        this.dealer = runtime.poker.dealer;
+        this.player = runtime.poker.player;
 
         this.dealerIsJoined = this.dealer.map(d => d != null);
         this.playerIsJoined = this.player.map(p => p != null);
@@ -57,6 +58,9 @@ export class GameSegment extends React.Component {
         this.riverKey = new Bond();
 
         this.handCards = runtime.poker.handCards(game.user);
+        this.sharedCards = runtime.poker.sharedCards;
+        this.stage = runtime.poker.stage;
+
         this.handCardsAreDealt = this.handCards.map(encrypted => encrypted.length !== 0);
 
         this.isJoined.tie(joined => {
@@ -127,22 +131,7 @@ export class GameSegment extends React.Component {
                             { this.displayMember("player", this.player, this.isPlayer) }
                             <p />
 
-                            <If condition={this.isJoined} then={
-                                <If condition={this.handCardsAreDealt} then={this.displayHandCards()}
-                                    else={<span>
-                                        <TransactButton content="deal cards" icon='game' tx={{
-                                            sender: this.user,
-                                            call: calls.poker.preflop(
-                                                keys.hand.map(key => key.modulus),
-                                                keys.flop.map(key => key.modulus),
-                                                keys.turn.map(key => key.modulus),
-                                                keys.river.map(key => key.modulus))
-                                        }}/>
-                                        {this.displayStatus("Good luck and have fun.")}
-                                </span>}/>
-                            } else={
-                                this.displayStatus("Sorry, at the moment here are only two chairs...")
-                            }/>
+                            {this.dealing()}
                         </div>} else={
                             <If condition={this.isJoined} then={
                                 this.displayStatus("You are waiting at the table...")
@@ -193,6 +182,38 @@ export class GameSegment extends React.Component {
         </div>;
     }
 
+    dealing () {
+        return <If condition={this.isJoined} then={
+            <If condition={this.handCardsAreDealt} then={this.game()}
+                else={<span>
+                    <TransactButton content="deal cards" icon='game' tx={{
+                        sender: this.user,
+                        call: calls.poker.preflop(
+                            keys.hand.map(key => key.modulus),
+                            keys.flop.map(key => key.modulus),
+                            keys.turn.map(key => key.modulus),
+                            keys.river.map(key => key.modulus))
+                    }}/>
+                    {this.displayStatus("Good luck and have fun.")}
+                </span>}/>
+        } else={
+            this.displayStatus("Sorry, at the moment here are only two chairs...")
+        }/>;
+    }
+
+    game () {
+        return <span>
+            { this.displaySharedCards() }
+            { this.displayHandCards() }
+            <TransactButton content="Next!" icon='game' tx={{
+                sender: this.user,
+                call: calls.poker.nextStage(this.stage.map(stage => {
+                    return keys.BONDS[stage + 1].map(key => key.exponent);
+                }))
+            }}/>
+        </span>;
+    }
+
     displayLoginMessage () {
         return <div>
             <Label>Logged in as
@@ -237,6 +258,15 @@ export class GameSegment extends React.Component {
                     let cards = decode(decrypted);
                     return cards.map(image);
                 }))
+        );
+    }
+
+    displaySharedCards () {
+        return SvgRow("shared",
+            this.sharedCards.map(encoded => {
+                let cards = decode(encoded);
+                return cards.map(image);
+            })
         );
     }
 }
