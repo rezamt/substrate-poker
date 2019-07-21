@@ -1,7 +1,7 @@
 import {pretty} from "oo7-substrate";
 import { Bond } from 'oo7';
 
-import {STAGES, NAMES} from './stage.js';
+import {STAGES, NAMES} from './stages.js';
 
 const NodeRSA = require('node-rsa');
 

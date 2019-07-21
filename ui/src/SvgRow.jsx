@@ -1,17 +1,14 @@
 import React from 'react';
-import ReactSVG from "react-svg";
 import { ReactiveComponent } from 'oo7-react';
 
 export function SvgRow (id, elements) { //`elements` is a Bond
     return <TableRow id={id} value={
         elements.map(array => {
             let indexed = Array.from(array.entries());
-            console.log(indexed);
-            console.log(indexed.length);
-
             return indexed.map(entry => {
                 return <td key={id + 'td' + entry[0]}>
-                    <ReactSVG key={id + entry[0]} src={entry[1]}/>
+                    <img key={id + entry[0]} src={entry[1]} alt='' width={156} height={218}/>
+                    {/* Original size is 360 x 504 */}
                 </td>
             });
         })

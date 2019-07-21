@@ -12,7 +12,9 @@ const SPADES   = 1;
 
 export function decode (bytes) {
     let n = bytes.length;
-    console.assert(n % 2 === 0);
+    console.assert(n % 2 === 0,
+        "Cards must be encoded with even number of bytes");
+
     return [...Array(n / 2).keys()]
         .map(i => { return {
             nominal: bytes[i * 2],
@@ -20,12 +22,18 @@ export function decode (bytes) {
         }});
 }
 
+export function hidden () {
+    return 'cards/back/bicycle_blue_mod.svg';
+}
+
 export function image (card) {
     return `cards/${suit(card.suit)}/${nominal(card.nominal)}.svg`;
 }
 
 function nominal (byte) {
-    console.assert(byte <= 13);
+    console.assert(byte <= 13,
+        "Nominal cannot be encoded with number greater that 13");
+
     if (byte === J) { return "J"; }
     if (byte === Q) { return "Q"; }
     if (byte === K) { return "K"; }

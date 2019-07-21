@@ -40,7 +40,7 @@ export class App extends ReactiveComponent {
 			<GameSegment />
 			<FundingSegment />
 			<Divider hidden />
-			<WalletSegment />
+			{/*<WalletSegment />*/}
 			<Divider hidden />
 			<UpgradeSegment />
 			<Divider hidden />

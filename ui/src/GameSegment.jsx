@@ -13,22 +13,25 @@ import { SvgRow } from './SvgRow';
 
 const bufEq = require('arraybuffer-equal');
 
-import { decode, image } from './cards.js';
+import { decode, image, hidden } from './cards.js';
 import { decrypt } from './naive_rsa.js';
 import { BONDS } from './keys.js';
 const keys = require('./keys.js');
+const stages = require('./stages.js');
 
 function accountsAreEqualAndNotNull(left, right) {
     return left != null && right != null
         && bufEq(left.buffer, right.buffer);
 }
 
+function bondsAccountsAreEqualAndNotNull(left, right) {
+    return left.map(d => right.map(u => accountsAreEqualAndNotNull(d, u)));
+}
+
 export class GameSegment extends React.Component {
     constructor () {
         super();
         window.game = this;
-        window.keys = keys;
-        window.bonds = BONDS;
 
         this.user = new Bond;
         this.isLoggedIn = (new Bond).default(false);
@@ -37,16 +40,19 @@ export class GameSegment extends React.Component {
         this.dealer = runtime.poker.dealer;
         this.player = runtime.poker.player;
 
+        this.isDealer = bondsAccountsAreEqualAndNotNull(this.dealer, this.user);
+        this.isPlayer = bondsAccountsAreEqualAndNotNull(this.player, this.user);
+
+        this.opponent = this.isDealer.map(isDealer => {
+            if (isDealer) {
+                return this.player;
+            } else {
+                return this.dealer;
+            }
+        });
+
         this.dealerIsJoined = this.dealer.map(d => d != null);
         this.playerIsJoined = this.player.map(p => p != null);
-
-        this.isDealer = this.dealer.map(d =>
-            this.user.map(u =>
-                accountsAreEqualAndNotNull(d, u)));
-
-        this.isPlayer = this.player.map(p =>
-            this.user.map(u =>
-                accountsAreEqualAndNotNull(p, u)));
 
         this.isJoined = this.isDealer.map(d =>
             this.isPlayer.map(p =>
@@ -58,10 +64,13 @@ export class GameSegment extends React.Component {
         this.riverKey = new Bond();
 
         this.handCards = runtime.poker.handCards(game.user);
+        this.opponentCards = this.opponent.map(runtime.poker.openCards);
+
         this.sharedCards = runtime.poker.sharedCards;
         this.stage = runtime.poker.stage;
 
         this.handCardsAreDealt = this.handCards.map(encrypted => encrypted.length !== 0);
+        this.opponentCardsAreRevealed = this.opponentCards.map(encrypted => encrypted.length !== 0);
 
         this.isJoined.tie(joined => {
             this.isLoggedIn.then(logged => {
@@ -105,8 +114,18 @@ export class GameSegment extends React.Component {
             <Header as='h2'>
                 <Icon name='send' />
                 <Header.Content>
-                    Blockchain Poker
-                    <Header.Subheader>Play poker via blockchain</Header.Subheader>
+                    <table><tbody><tr>
+                        <td width="400">
+                            Blockchain Poker
+                            <Header.Subheader>Play poker via blockchain</Header.Subheader>
+                        </td><td>
+                            <If condition={this.isLoggedIn} then={
+                                <div style={{ paddingTop: '1em' }}>
+                                    <Button onClick={this.logOut} content="Log out" icon="sign in" color="orange" />
+                                </div>
+                            }/>
+                        </td>
+                    </tr></tbody></table>
                 </Header.Content>
             </Header>
             <div>
@@ -125,13 +144,21 @@ export class GameSegment extends React.Component {
 
 				{/* User logged in */}
                 <If condition={this.isLoggedIn} then={<span>
+                    { this.displayAccountInfo() }
+
                     <If condition={this.dealerIsJoined} then={<div style={{ paddingTop: '1em' }}>
-                        { this.displayMember("dealer", this.dealer, this.isDealer) }
+                        <If condition={this.handCardsAreDealt} else={
+                            this.displayParticipant(this.dealer, false)}/>
                         <If condition={this.playerIsJoined} then={<div>
-                            { this.displayMember("player", this.player, this.isPlayer) }
+                            <If condition={this.handCardsAreDealt} else={
+                                this.displayParticipant(this.player, false)}/>
                             <p />
 
-                            {this.dealing()}
+                            <If condition={this.isJoined} then={
+                                this.renderGameTable()
+                            } else={
+                                this.displayStatus("Sorry, at the moment here are only two chairs...")
+                            }/>
                         </div>} else={
                             <If condition={this.isJoined} then={
                                 this.displayStatus("You are waiting at the table...")
@@ -151,7 +178,6 @@ export class GameSegment extends React.Component {
                             </span>}/>
                         }/>
                     </div>} else={<span>
-                        { this.displayLoginMessage() }
                         { this.displayStatus("There is nobody in the room.") }
 
                         {/* INIT */}
@@ -164,57 +190,80 @@ export class GameSegment extends React.Component {
                             }} color="green" icon="sign in"
                                content="Take a seat"/>
                         </div>
-                        </span>}/>
-
-					<div style={{ paddingTop: '1em' }}>
-						<Button onClick={this.logOut} content="Log out" icon="sign in" color="orange" />
-					</div>
+                    </span>}/>
 				</span>} />
             </div>
         </Segment>
     }
 
-    displayStatus (status) {
-        return <div style={{ paddingTop: '1em' }}>
-            <Label color="blue">
-                { status }
-            </Label>
+    renderGameTable () {
+        return <div style={{
+            'width': '1282px',
+            'height': '679px',
+            'background-color': 'green',
+            'border': '10px solid darkgreen',
+            'border-radius': '20px',
+            'padding-top': '20px',
+            'padding-left': '20px',
+            'padding-right': '20px',
+            'padding-bottom': '20px',
+        }}>
+            <If condition={this.handCardsAreDealt} then={<span>
+                {/*Players have received cards on their hands*/}
+                <table><tbody><tr>
+                        <td>
+                            <table><tbody><tr><td>
+                                { this.displayParticipant(this.opponent, true)}
+                                { this.displayOpponentCards() }
+                            </td></tr><tr height="80"><td>
+                                <div align="right">
+                                    <TransactButton content="Next!" icon='game' tx={{
+                                        sender: this.user,
+                                        call: calls.poker.nextStage(this.stage.map(stage => {
+                                            return keys.BONDS[stages.next(stage)].map(key => key.exponent);
+                                        }))
+                                    }}/>
+                                </div>
+                            </td></tr><tr><td>
+                                { this.displayHandCards() }
+                                { this.displayParticipant(this.user, true)}
+                            </td></tr></tbody></table>
+                        </td>
+                        <td>
+                            <div style={{
+                                'padding-left': '24px'}}>
+                                <div style={{
+                                    'height': '265px',
+                                    'width': '838px',
+                                    'background-color': 'forestgreen',
+                                    'border': '6px solid greenyellow',
+                                    'border-radius': '12px',
+                                    'padding-top': '12px',
+                                    'padding-left': '12px',
+                                    'padding-right': '12px',
+                                    'padding-bottom': '12px',}}>
+                                    <If condition={this.sharedCards.map(encoded => encoded.length > 0)}
+                                        then={this.displaySharedCards()}/>
+                                </div>
+                            </div>
+                        </td>
+                </tr></tbody></table>
+            </span>} else={<span>
+                {/*Players haven't received cards on their hands*/}
+                <TransactButton content="deal cards" icon='game' tx={{
+                    sender: this.user,
+                    call: calls.poker.preflop(
+                        keys.hand.map(key => key.modulus),
+                        keys.flop.map(key => key.modulus),
+                        keys.turn.map(key => key.modulus),
+                        keys.river.map(key => key.modulus))
+                }}/>
+                {this.displayStatus("Good luck and have fun.")}
+            </span>}/>
         </div>;
     }
 
-    dealing () {
-        return <If condition={this.isJoined} then={
-            <If condition={this.handCardsAreDealt} then={this.game()}
-                else={<span>
-                    <TransactButton content="deal cards" icon='game' tx={{
-                        sender: this.user,
-                        call: calls.poker.preflop(
-                            keys.hand.map(key => key.modulus),
-                            keys.flop.map(key => key.modulus),
-                            keys.turn.map(key => key.modulus),
-                            keys.river.map(key => key.modulus))
-                    }}/>
-                    {this.displayStatus("Good luck and have fun.")}
-                </span>}/>
-        } else={
-            this.displayStatus("Sorry, at the moment here are only two chairs...")
-        }/>;
-    }
-
-    game () {
-        return <span>
-            { this.displaySharedCards() }
-            { this.displayHandCards() }
-            <TransactButton content="Next!" icon='game' tx={{
-                sender: this.user,
-                call: calls.poker.nextStage(this.stage.map(stage => {
-                    return keys.BONDS[stage + 1].map(key => key.exponent);
-                }))
-            }}/>
-        </span>;
-    }
-
-    displayLoginMessage () {
+    displayAccountInfo () {
         return <div>
             <Label>Logged in as
                 <Label.Detail>
@@ -229,25 +278,30 @@ export class GameSegment extends React.Component {
         </div>;
     }
 
-    displayMember (role, member, predicate) {
-        return <div>
-            <If condition={role === "dealer"} then={
-                <Label color="red"><Pretty value="Dealer" /></Label>
-            } else={
-                <Label color="blue"><Pretty value="Player" /></Label>
-            } />
+    displayParticipant (participant, markDealer) {
+        function printAccount(account) {
+            return runtime.indices.ss58Encode(runtime.indices.tryIndex(account));
+        }
 
-            {/*<Identicon size='24' account={member} />*/}
-            <Label>
-                <Pretty value={member.map(account =>
-                    runtime.indices.ss58Encode(runtime.indices.tryIndex(account))
-                )} />
-            </Label>
-            {/*<Pretty value={member} />*/}
-            <If condition={predicate} then={
-                <Label color="yellow">You</Label>
-            } />
-        </div>;
+        let content = <span><Label color="blue"><Pretty value={participant.map(printAccount)}/></Label>
+            <If condition={bondsAccountsAreEqualAndNotNull(participant, this.user)}
+                then={<Label color="yellow">You</Label>}
+                else={<Label color="yellow">Opponent</Label>}/>
+        </span>;
+
+        {/*<Identicon size='24' account={participant} />*/}
+
+        return <table><tbody>
+            <If condition={markDealer} then={<tr>
+                <td width="259px">{content}</td>
+                <td>
+                    <If condition={bondsAccountsAreEqualAndNotNull(participant, this.dealer)}
+                        then={<Label color="red"><Pretty value="Dealer" /></Label>}/>
+                </td>
+            </tr>} else={<tr><td>
+                {content}
+            </td></tr>}/>
+        </tbody></table>;
     }
 
     displayHandCards () {
@@ -261,6 +315,17 @@ export class GameSegment extends React.Component {
         );
     }
 
+    displayOpponentCards () {
+        let hiddenCards = new Bond();
+        hiddenCards.changed([...Array(2).keys()]
+            .map(_ => hidden()));
+
+        return <If condition={this.opponentCardsAreRevealed}
+           then={SvgRow("opponent-revealed",
+               this.opponentCards.map(encoded => decode(encoded).map(image)))}
+           else={SvgRow("opponent-hidden", hiddenCards)}/>;
+    }
+
     displaySharedCards () {
         return SvgRow("shared",
             this.sharedCards.map(encoded => {
@@ -268,6 +333,14 @@ export class GameSegment extends React.Component {
                 return cards.map(image);
             })
         );
+    }
+
+    displayStatus (status) {
+        return <div style={{ paddingTop: '1em' }}>
+            <Label color="blue">
+                { status }
+            </Label>
+        </div>;
     }
 }
 
