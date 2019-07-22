@@ -1,5 +1,7 @@
 # Blockchain Poker Node
 
+## Building the project
+
 Install Rust:
 
 ```bash
@@ -22,6 +24,20 @@ Build all native code:
 
 ```bash
 cargo build --release
+```
+
+## Running the node
+
+This will start backend in development mode with preconfigured accounts:
+
+```bash
+./target/release/poker --dev
+```
+
+In case you want to clear state of the blockchain, run this:
+
+```bash
+./target/release/poker purge-chain --dev
 ```
 
 # Tests
