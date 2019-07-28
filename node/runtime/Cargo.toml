@@ -153,3 +153,6 @@ default_features = false
 git = 'https://github.com/paritytech/substrate.git'
 package = 'sr-version'
 rev = 'f2f2994822f4331291597e341798fb6271bb6ef4'
+
+[dev-dependencies]
+permutohedron = "0.2.4"

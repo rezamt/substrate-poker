@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use rstd::prelude::*;
 use core::debug_assert;
 
@@ -15,7 +17,7 @@ pub const CLUBS:    Suit = 3;
 pub const DIAMONDS: Suit = 4;
 pub const SPADES:   Suit = 1;
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
 pub struct Card {
     pub nominal: Nominal,
     pub suit: Suit

@@ -58,6 +58,7 @@ pub type Nonce = u64;
 /// Used for the module poker in `./poker.rs`
 mod keys;
 mod naive_rsa;
+mod ranking;
 mod cards;
 mod stage;
 mod poker;

@@ -26,6 +26,12 @@ Build all native code:
 cargo build --release
 ```
 
+## Running the tests
+
+```bash
+cargo test --all --release
+```
+
 ## Running the node
 
 This will start backend in development mode with preconfigured accounts:
@@ -39,7 +45,3 @@ In case you want to clear state of the blockchain, run this:
 ```bash
 ./target/release/poker purge-chain --dev
 ```
-
-# Tests
-
-You can run tests with `cargo test --all`
