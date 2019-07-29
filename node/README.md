@@ -8,7 +8,7 @@ Install Rust:
 curl https://sh.rustup.rs -sSf | sh
 ```
 
-Install required tools:
+**Make sure** that you have installed required versions of toolchains:
 
 ```bash
 ./scripts/init.sh
