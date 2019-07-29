@@ -8,7 +8,7 @@ Install Rust:
 curl https://sh.rustup.rs -sSf | sh
 ```
 
-Install required tools:
+**Make sure** that you have installed required versions of toolchains:
 
 ```bash
 ./scripts/init.sh
@@ -45,3 +45,5 @@ In case you want to clear state of the blockchain, run this:
 ```bash
 ./target/release/poker purge-chain --dev
 ```
+
+**Don't use DEBUG build. It is broken at the moment, and will be fixed after adopting off-chain workers.**

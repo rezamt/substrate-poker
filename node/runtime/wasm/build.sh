@@ -10,11 +10,7 @@ else
 	MODE="release"
 fi
 
-if cargo --version | grep -q "nightly"; then
-	CARGO_CMD="cargo"
-else
-	CARGO_CMD="cargo +nightly"
-fi
+CARGO_CMD="cargo +$(cat ../../wasm.toolchain)"
 
 echo "Cargo parameters: '$@'"
 $CARGO_CMD build $@ --target=wasm32-unknown-unknown
