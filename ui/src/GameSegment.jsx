@@ -16,6 +16,7 @@ const bufEq = require('arraybuffer-equal');
 import { decode, image, hidden } from './cards.js';
 import { decrypt } from './naive_rsa.js';
 import { BONDS } from './keys.js';
+import {BalanceBond} from "./BalanceBond";
 const keys = require('./keys.js');
 const stages = require('./stages.js');
 
@@ -147,11 +148,19 @@ export class GameSegment extends React.Component {
                     { this.displayAccountInfo() }
 
                     <If condition={this.dealerIsJoined} then={<div style={{ paddingTop: '1em' }}>
-                        <If condition={this.handCardsAreDealt} else={
-                            this.displayParticipant(this.dealer, false)}/>
+                        <table><tbody><tr>
+                            <td>Blind bet is </td>
+                            <td><Label color="violet" size="large">
+                                <Pretty value={runtime.poker.blind}/>
+                            </Label></td>
+                            <td> in this game</td>
+                        </tr></tbody></table>
+
+                        <If condition={this.handCardsAreDealt}
+                            else={this.displayParticipant(this.dealer, false)}/>
                         <If condition={this.playerIsJoined} then={<div>
-                            <If condition={this.handCardsAreDealt} else={
-                                this.displayParticipant(this.player, false)}/>
+                            <If condition={this.handCardsAreDealt}
+                                else={this.displayParticipant(this.player, false)}/>
                             <p />
 
                             <If condition={this.isJoined} then={
@@ -164,49 +173,74 @@ export class GameSegment extends React.Component {
                                 this.displayStatus("You are waiting at the table...")
                             } else={<span>
                                 { this.displayStatus("One person is waiting at the table.") }
-
-                                {/* JOIN */}
-                                <div style={{ paddingTop: '1em' }}>
-                                    <TransactButton tx={{
-                                        sender: this.user,
-                                        call: calls.poker.joinGame(),
-                                        compact: false,
-                                        longevity: true
-                                    }} color="green" icon="sign in"
-                                       content="Join"/>
-                                </div>
+                                { this.renderJoinGameSection() }
                             </span>}/>
                         }/>
                     </div>} else={<span>
                         { this.displayStatus("There is nobody in the room.") }
-
-                        {/* INIT */}
-                        <div style={{ paddingTop: '1em' }}>
-                            <TransactButton tx={{
-                                sender: runtime.indices.tryIndex(this.user),
-                                call: calls.poker.joinGame(),
-                                compact: false,
-                                longevity: true
-                            }} color="green" icon="sign in"
-                               content="Take a seat"/>
-                        </div>
+                        { this.renderCreateGameSection() }
                     </span>}/>
 				</span>} />
             </div>
         </Segment>
     }
 
+    renderCreateGameSection () {
+        let buyIn = new Bond;
+        let blind = new Bond;
+
+        return <div style={{ paddingTop: '1em' }}>
+            <div style={{ paddingBottom: '1em' }}>
+                <div style={{ fontSize: 'small' }}>minimal amount to bet</div>
+                <BalanceBond bond={blind} />
+            </div>
+            <div style={{ paddingBottom: '1em' }}>
+                <div style={{ fontSize: 'small' }}>amount to put on table</div>
+                <BalanceBond bond={buyIn} />
+            </div>
+            <div style={{ paddingTop: '1em' }}>
+                <TransactButton tx={{
+                    sender: this.user,
+                    call: calls.poker.createGame(buyIn, blind),
+                    compact: false,
+                    longevity: true
+                }} color="green" icon="sign in"
+                                content="Join"/>
+            </div>
+        </div>;
+    }
+
+    renderJoinGameSection () {
+        let buyIn = new Bond;
+
+        return <div style={{ paddingTop: '1em' }}>
+            <div style={{ paddingBottom: '1em' }}>
+                <div style={{ fontSize: 'small' }}>amount to put on table</div>
+                <BalanceBond bond={buyIn} />
+            </div>
+            <div style={{ paddingTop: '1em' }}>
+                <TransactButton tx={{
+                    sender: this.user,
+                    call: calls.poker.joinGame(buyIn),
+                    compact: false,
+                    longevity: true
+                }} color="green" icon="sign in"
+                   content="Join"/>
+            </div>
+        </div>;
+    }
+
     renderGameTable () {
         return <div style={{
             'width': '1282px',
             'height': '679px',
-            'background-color': 'green',
+            'backgroundColor': 'green',
             'border': '10px solid darkgreen',
-            'border-radius': '20px',
-            'padding-top': '20px',
-            'padding-left': '20px',
-            'padding-right': '20px',
-            'padding-bottom': '20px',
+            'borderRadius': '20px',
+            'paddingTop': '20px',
+            'paddingLeft': '20px',
+            'paddingRight': '20px',
+            'paddingBottom': '20px',
         }}>
             <If condition={this.handCardsAreDealt} then={<span>
                 {/*Players have received cards on their hands*/}
@@ -231,17 +265,17 @@ export class GameSegment extends React.Component {
                         </td>
                         <td>
                             <div style={{
-                                'padding-left': '24px'}}>
+                                'paddingLeft': '24px'}}>
                                 <div style={{
                                     'height': '265px',
                                     'width': '838px',
-                                    'background-color': 'forestgreen',
+                                    'backgroundColor': 'forestgreen',
                                     'border': '6px solid greenyellow',
-                                    'border-radius': '12px',
-                                    'padding-top': '12px',
-                                    'padding-left': '12px',
-                                    'padding-right': '12px',
-                                    'padding-bottom': '12px',}}>
+                                    'borderRadius': '12px',
+                                    'paddingTop': '12px',
+                                    'paddingLeft': '12px',
+                                    'paddingRight': '12px',
+                                    'paddingBottom': '12px',}}>
                                     <If condition={this.sharedCards.map(encoded => encoded.length > 0)}
                                         then={this.displaySharedCards()}/>
                                 </div>
@@ -283,7 +317,9 @@ export class GameSegment extends React.Component {
             return runtime.indices.ss58Encode(runtime.indices.tryIndex(account));
         }
 
-        let content = <span><Label color="blue"><Pretty value={participant.map(printAccount)}/></Label>
+        let content = <span>
+            <Label color="blue"><Pretty value={participant.map(printAccount)}/></Label>
+            <Label><Pretty value={runtime.poker.stacks(participant)}/></Label>
             <If condition={bondsAccountsAreEqualAndNotNull(participant, this.user)}
                 then={<Label color="yellow">You</Label>}
                 else={<Label color="yellow">Opponent</Label>}/>
@@ -337,7 +373,7 @@ export class GameSegment extends React.Component {
 
     displayStatus (status) {
         return <div style={{ paddingTop: '1em' }}>
-            <Label color="blue">
+            <Label size="large" color="blue">
                 { status }
             </Label>
         </div>;

@@ -9,15 +9,15 @@ use rstd::cmp::Ordering::{
 
 pub type Rank = u8;
 
-pub const STRAIGHT_FLUSH: Rank = 8;
-pub const QUAD:           Rank = 7;
-pub const FULL_HOUSE:     Rank = 6;
-pub const FLUSH:          Rank = 5;
-pub const STRAIGHT:       Rank = 4;
-pub const SET:            Rank = 3;
-pub const TWO_PAIR:       Rank = 2;
-pub const ONE_PAIR:       Rank = 1;
-pub const HIGH_CARD:      Rank = 0;
+pub const STRAIGHT_FLUSH:  Rank = 8;
+pub const QUAD:            Rank = 7;
+pub const FULL_HOUSE:      Rank = 6;
+pub const FLUSH:           Rank = 5;
+pub const STRAIGHT:        Rank = 4;
+pub const THREE_OF_A_KIND: Rank = 3;
+pub const TWO_PAIR:        Rank = 2;
+pub const ONE_PAIR:        Rank = 1;
+pub const HIGH_CARD:       Rank = 0;
 
 #[derive(Debug)]
 pub struct RankedHand {
@@ -72,7 +72,7 @@ pub fn classify(hand: &[Card]) -> Combination {
         if triple[0] == triple[1] && triple[1] == triple[2] {
             Some(triple[0])
         } else { None }) {
-            return Combination { rank: SET, high: nominal };
+            return Combination { rank: THREE_OF_A_KIND, high: nominal };
         }
 
     let mut paired_nominals: Vec<Nominal> = nominals.windows(2)
@@ -406,15 +406,15 @@ mod tests {
         assert_eq!(full_house_of_twos.high, 2);
 
         let set_of_aces = check(spades(A), clubs(A), hearts(A), diamonds(2), clubs(K));
-        assert_eq!(set_of_aces.rank, SET);
+        assert_eq!(set_of_aces.rank, THREE_OF_A_KIND);
         assert_eq!(set_of_aces.high, A);
 
         let set_of_queens = check(clubs(Q), hearts(Q), diamonds(Q), clubs(A), hearts(J));
-        assert_eq!(set_of_queens.rank, SET);
+        assert_eq!(set_of_queens.rank, THREE_OF_A_KIND);
         assert_eq!(set_of_queens.high, Q);
 
         let set_of_twos = check(diamonds(2), spades(2), hearts(2), diamonds(A), spades(3));
-        assert_eq!(set_of_twos.rank, SET);
+        assert_eq!(set_of_twos.rank, THREE_OF_A_KIND);
         assert_eq!(set_of_twos.high, 2);
 
         let two_pair_of_aces = check(spades(A), clubs(A), hearts(K), clubs(K), hearts(J));
