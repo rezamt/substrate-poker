@@ -183,9 +183,11 @@ export class GameSegment extends React.Component {
 
                     <If condition={this.dealerIsJoined} then={<div style={{ paddingTop: '1em' }}>
                         <table><tbody><tr>
-                            <td>Blind bet is </td>
+                            <td>Blinds are </td>
                             <td><Label color="violet" size="large">
-                                <Pretty value={runtime.poker.blind}/>
+                                <Pretty value={runtime.poker.blinds
+                                    .map(blinds => `${blinds[0][0]}/${blinds[0][1]}`)
+                                }/>
                             </Label></td>
                             <td> in this game</td>
                         </tr></tbody></table>
@@ -283,37 +285,36 @@ export class GameSegment extends React.Component {
                             <table><tbody><tr><td>
                                 { this.displayParticipant(this.opponent, true)}
                                 { this.displayOpponentCards() }
-                            </td></tr><tr height="80"><td>
-                                <div align="right">
-                                    <TransactButton content="Next!" icon='game' tx={{
-                                        sender: this.user,
-                                        call: calls.poker.nextStage(this.stage.map(stage => {
-                                            return keys.BONDS[stages.next(stage)].map(key => key.exponent);
-                                        }))
-                                    }}/>
-                                </div>
-                            </td></tr><tr><td>
+                                { this.displayBet(this.opponent) }
+                            </td></tr>
+                            <tr height="30"><td></td></tr>
+                            <tr><td>
+                                { this.displayBet(this.user) }
                                 { this.displayHandCards() }
                                 { this.displayParticipant(this.user, true)}
                             </td></tr></tbody></table>
                         </td>
                         <td>
-                            <div style={{
-                                'paddingLeft': '24px'}}>
+                            <table><tbody><tr><td>
                                 <div style={{
-                                    'height': '265px',
-                                    'width': '838px',
-                                    'backgroundColor': 'forestgreen',
-                                    'border': '6px solid greenyellow',
-                                    'borderRadius': '12px',
-                                    'paddingTop': '12px',
-                                    'paddingLeft': '12px',
-                                    'paddingRight': '12px',
-                                    'paddingBottom': '12px',}}>
-                                    <If condition={this.sharedCards.map(encoded => encoded.length > 0)}
-                                        then={this.displaySharedCards()}/>
+                                    'paddingLeft': '24px'}}>
+                                    <div style={{
+                                        'height': '265px',
+                                        'width': '838px',
+                                        'backgroundColor': 'forestgreen',
+                                        'border': '6px solid greenyellow',
+                                        'borderRadius': '12px',
+                                        'paddingTop': '12px',
+                                        'paddingLeft': '12px',
+                                        'paddingRight': '12px',
+                                        'paddingBottom': '12px',}}>
+                                        <If condition={this.sharedCards.map(encoded => encoded.length > 0)}
+                                            then={this.displaySharedCards()}/>
+                                    </div>
                                 </div>
-                            </div>
+                            </td></tr><tr><td>
+                                { this.displayActions() }
+                            </td></tr></tbody></table>
                         </td>
                 </tr></tbody></table>
             </span>} else={<span>
@@ -376,6 +377,23 @@ export class GameSegment extends React.Component {
                     return cards.map(image);
                 }))
         );
+    }
+
+    displayBet (participant) {
+        return <div align="center">
+            <Label color="olive">Bet: <Pretty value={runtime.poker.bets(participant)}/></Label>
+        </div>
+    }
+
+    displayActions () {
+        return <div align="center">
+            <TransactButton content="Next!" icon='game' tx={{
+                sender: this.user,
+                    call: calls.poker.nextStage(this.stage.map(stage => {
+                    return keys.BONDS[stages.next(stage)].map(key => key.exponent);
+                }))
+            }}/>
+        </div>
     }
 
     displayOpponentCards () {
