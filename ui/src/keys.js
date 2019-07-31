@@ -79,13 +79,9 @@ const MODULUS_SUFFIX = 'key_modulus';
 const EXPONENT_SUFFIX = 'key_exponent';
 
 function modulusField (keyName) {
-    let result = `${STORAGE_PREFIX}_${pretty(game.user._value)}_${keyName}_${MODULUS_SUFFIX}`;
-    console.log(`Using this local storage key: ${result}`);
-    return result;
+    return `${STORAGE_PREFIX}_${pretty(game.user._value)}_${keyName}_${MODULUS_SUFFIX}`;
 }
 
 function exponentField (keyName) {
-    let result = `${STORAGE_PREFIX}_${pretty(game.user._value)}_${keyName}_${EXPONENT_SUFFIX}`;
-    console.log(`Using this local storage key: ${result}`);
-    return result;
+    return `${STORAGE_PREFIX}_${pretty(game.user._value)}_${keyName}_${EXPONENT_SUFFIX}`;
 }

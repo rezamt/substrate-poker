@@ -139,7 +139,6 @@ decl_module! {
 				debug_assert!(keys.is_valid());
 				<Keys<T>>::insert(&who, &keys);
 
-
 				let dealer = <Dealer<T>>::get().unwrap();
 				let player = <Player<T>>::get().unwrap();
 

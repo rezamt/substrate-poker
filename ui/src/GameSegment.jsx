@@ -4,10 +4,11 @@ require('semantic-ui-css/semantic.min.css');
 import { Icon, Label, Header, Segment, Button } from 'semantic-ui-react';
 import { Bond } from 'oo7';
 import { If } from 'oo7-react';
-import { calls, runtime } from 'oo7-substrate';
+import { calls, post, runtime } from 'oo7-substrate';
 import { Identicon } from 'polkadot-identicon';
 import { SignerBond } from './AccountIdBond.jsx';
 import { TransactButton } from './TransactButton.jsx';
+import { BlinkingLabel } from './BlinkingLabel.jsx';
 import { Pretty } from './Pretty';
 import { SvgRow } from './SvgRow';
 
@@ -75,29 +76,35 @@ export class GameSegment extends React.Component {
 
         this.isJoined.tie(joined => {
             this.isLoggedIn.then(logged => {
-                if (joined && logged) {
-                    this.handCardsAreDealt.then(dealt => console.assert(!dealt));
-                    console.log("Joined the game");
-                    keys.generate();
+                if (joined && logged) { //joining a game while being logged in
+                    this.handCardsAreDealt.then(dealt => {
+                        console.log("Joining the game");
+                        keys.generate();
+                        this.requestCards();
+                    });
                 }
             });
-        })
+        });
+
+        this.isLoggedIn.tie(logged => {
+            this.isJoined.then(joined => {
+                if (joined && logged) { //logging in while being joined to a game
+                    this.handCardsAreDealt.then(dealt => {
+                        console.log("Resuming to the game");
+                        if (dealt) {
+                            keys.load();
+                        } else {
+                            keys.generate();
+                            this.requestCards();
+                        }
+                    });
+                }
+            });
+        });
     }
 
     logIn () {
         game.isLoggedIn.changed(true);
-        game.isJoined.then(joined => {
-           if (joined) {
-               console.log("Resuming to the game");
-               game.handCardsAreDealt.then(dealt => {
-                   if (dealt) {
-                       keys.load();
-                   } else {
-                       keys.generate();
-                   }
-               })
-           }
-        });
     }
 
     logOut () {
@@ -108,6 +115,33 @@ export class GameSegment extends React.Component {
         if (event.key === "Enter" && game.user.isReady()) {
             game.logIn();
         }
+    }
+
+    requestCards () {
+        game.opponent.tie((other, id) => {
+            if (other != null) {
+                console.log("Requesting dealing of cards");
+                let tx = {
+                    sender: this.user,
+                    call: calls.poker.preflop(
+                        keys.hand.map(key => key.modulus),
+                        keys.flop.map(key => key.modulus),
+                        keys.turn.map(key => key.modulus),
+                        keys.river.map(key => key.modulus))
+                };
+                let status = post(tx);
+                status.tie((s,id) => {
+                    console.log(s);
+                    if (s.confirmed || s.scheduled) {
+                        console.log("Cards dealing request registered");
+                        status.untie(id);
+                    }
+                });
+                if (id) {
+                    game.opponent.untie(id);
+                }
+            }
+        });
     }
 
     render () {
@@ -166,18 +200,18 @@ export class GameSegment extends React.Component {
                             <If condition={this.isJoined} then={
                                 this.renderGameTable()
                             } else={
-                                this.displayStatus("Sorry, at the moment here are only two chairs...")
+                                this.displayMessage("Sorry, at the moment here are only two chairs...")
                             }/>
                         </div>} else={
                             <If condition={this.isJoined} then={
-                                this.displayStatus("You are waiting at the table...")
+                                this.displayMessage("You are waiting at the table...")
                             } else={<span>
-                                { this.displayStatus("One person is waiting at the table.") }
+                                { this.displayMessage("One person is waiting at the table.") }
                                 { this.renderJoinGameSection() }
                             </span>}/>
                         }/>
                     </div>} else={<span>
-                        { this.displayStatus("There is nobody in the room.") }
+                        { this.displayMessage("There is nobody in the room.") }
                         { this.renderCreateGameSection() }
                     </span>}/>
 				</span>} />
@@ -195,7 +229,7 @@ export class GameSegment extends React.Component {
                 <BalanceBond bond={blind} />
             </div>
             <div style={{ paddingBottom: '1em' }}>
-                <div style={{ fontSize: 'small' }}>amount to put on table</div>
+                <div style={{ fontSize: 'small' }}>amount to put on the table</div>
                 <BalanceBond bond={buyIn} />
             </div>
             <div style={{ paddingTop: '1em' }}>
@@ -205,7 +239,7 @@ export class GameSegment extends React.Component {
                     compact: false,
                     longevity: true
                 }} color="green" icon="sign in"
-                                content="Join"/>
+                   content="Create"/>
             </div>
         </div>;
     }
@@ -283,16 +317,9 @@ export class GameSegment extends React.Component {
                         </td>
                 </tr></tbody></table>
             </span>} else={<span>
-                {/*Players haven't received cards on their hands*/}
-                <TransactButton content="deal cards" icon='game' tx={{
-                    sender: this.user,
-                    call: calls.poker.preflop(
-                        keys.hand.map(key => key.modulus),
-                        keys.flop.map(key => key.modulus),
-                        keys.turn.map(key => key.modulus),
-                        keys.river.map(key => key.modulus))
-                }}/>
-                {this.displayStatus("Good luck and have fun.")}
+                {/*Players haven't received cards yet*/}
+                {this.displayStatus("Providing round keys and waiting for cards...")}
+                {this.displayMessage("Good luck and have fun.")}
             </span>}/>
         </div>;
     }
@@ -372,9 +399,17 @@ export class GameSegment extends React.Component {
     }
 
     displayStatus (status) {
+        return <div style={{ paddingTop: '1em', paddingBottom: '1em' }}>
+            <BlinkingLabel size="massive" color="yellow">
+                { status }
+            </BlinkingLabel>
+        </div>;
+    }
+
+    displayMessage (message) {
         return <div style={{ paddingTop: '1em' }}>
             <Label size="large" color="blue">
-                { status }
+                { message }
             </Label>
         </div>;
     }

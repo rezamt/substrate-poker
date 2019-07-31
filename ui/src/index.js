@@ -6,8 +6,7 @@ import { setNodeUri } from 'oo7-substrate'
 require('./denominations')
 
 import 'babel-polyfill'
-import './events.js'
 
-setNodeUri(['ws://127.0.0.1:9944'])
+setNodeUri(['ws://127.0.0.1:9944']);
 
 render(<App/>, document.getElementById('app'));
