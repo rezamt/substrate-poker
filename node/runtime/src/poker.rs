@@ -1,9 +1,4 @@
-use crate::{
-	stage::{self, StageId},
-	naive_rsa,
-	cards,
-	keys,
-};
+use crate::{naive_rsa, stage, cards, keys};
 
 use support::{decl_module, decl_storage, decl_event, StorageValue, StorageMap};
 use support::traits::{Currency, WithdrawReason, ExistenceRequirement};
@@ -61,8 +56,6 @@ decl_storage! {
 	}
 }
 
-//todo: use methods from `support/src/storage/mod.rs` like `mutate` to improve performance
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event<T>() = default;
@@ -80,17 +73,13 @@ decl_module! {
 				return Err("Choose smaller blinds.");
 			}
 
-			let _ = <balances::Module<T> as Currency<_>>::withdraw(
-				&who, buy_in, WithdrawReason::Transfer,
-				ExistenceRequirement::KeepAlive)?;
-			<Stacks<T>>::insert(&who, &buy_in);
+			runtime_io::print("Dealer joins the game, waiting for a player...");
+			<Dealer<T>>::put(&who);
 
 			let small_blind = big_blind / T::Balance::sa(2);
 			<Blinds<T>>::put((small_blind, big_blind));
 
-			runtime_io::print("Dealer joins the game, waiting for a player...");
-			<Dealer<T>>::put(&who);
-			Ok(())
+			Self::refill_chips(who, buy_in)
 		}
 
 		fn join_game(origin, buy_in: T::Balance) -> Result {
@@ -110,14 +99,10 @@ decl_module! {
 				return Err("Get some money first...");
 			}
 
-			let _ = <balances::Module<T> as Currency<_>>::withdraw(
-				&who, buy_in, WithdrawReason::Transfer,
-				ExistenceRequirement::KeepAlive)?;
-			<Stacks<T>>::insert(&who, &buy_in);
-
-			runtime_io::print("Player joins the game! It's gonna be hot!");
 			<Player<T>>::put(&who);
-			Ok(())
+			runtime_io::print("Player joins the game! It's gonna be hot!");
+
+			Self::refill_chips(who, buy_in)
 		}
 
 		fn preflop(origin,
@@ -204,24 +189,25 @@ decl_module! {
 				}
 
 				let (small_blind, big_blind) = <Blinds<T>>::get();
-				if &who == &dealer {
-					<Bets<T>>::insert(&who, small_blind);
+				let blind_bet = if &who == &dealer {
+					small_blind
 				} else {
-					<Bets<T>>::insert(&who, big_blind);
-				}
+					big_blind
+				};
 
+				<Bets<T>>::insert(&who, blind_bet);
 				Ok(())
 			}
 		}
 
 		fn next_stage(origin, stage_secret: Vec<u8>) -> Result {
+			let who = ensure_signed(origin)?;
+
 			let stage = <Stage<T>>::get() + 1;
 			if stage == stage::SHOWDOWN {
 				//Current stage is the last, revealing hand cards
-				return Self::reveal_hand(origin, stage_secret);
+				return Self::reveal_hand(who, stage_secret);
 			}
-
-			let who = ensure_signed(origin)?;
 
 			if <Secrets<T>>::get(&who).retrieve(stage).is_some() {
 				Err("The next stage is already initialized for this player")
@@ -258,9 +244,7 @@ decl_module! {
 					let revealed = naive_rsa::decrypt(&hidden, &dealer_key[..], &dealer_secret[..])?;
 					let mut revealed = naive_rsa::decrypt(&revealed, &player_key[..], &player_secret[..])?;
 
-					let mut shared_cards = <SharedCards<T>>::get();
-					shared_cards.append(&mut revealed);
-					<SharedCards<T>>::put(shared_cards);
+					<SharedCards<T>>::mutate(|v| v.append(&mut revealed));
 
 					<Stage<T>>::put(stage);
 					Ok(())
@@ -276,24 +260,149 @@ decl_module! {
 			}
 		}
 
-		fn reveal_hand(origin, hand_secret: Vec<u8>) -> Result {
-			runtime_io::print("Revealing hand cards");
+		fn fold(origin) -> Result {
 			let who = ensure_signed(origin)?;
+			Self::perform_fold(who)
+		}
 
-			let hand_key  = <Keys<T>>::get(&who).hand;
-			let encrypted = <HandCards<T>>::get(&who);
-			let decrypted = naive_rsa::decrypt(&encrypted, &hand_key[..], &hand_secret[..])?;
+		fn leave(origin) -> Result {
+			let who = ensure_signed(origin)?;
+			if <Stage<T>>::get() != stage::IDLE {
+				Self::perform_fold(who.clone())?;
+			}
+			Self::remove_participant(who)
+		}
 
-			<OpenCards<T>>::insert(&who, decrypted);
+		fn quit(origin) -> Result {
+			let who = ensure_signed(origin)?;
+			if <Stage<T>>::get() != stage::IDLE {
+				return Err("Can't quit while the game is in progress");
+			}
 
-			Ok(())
+			//for the case when we made a blind bet,
+			//but other player haven't yet
+			Self::reset_idle(who.clone());
+
+			Self::remove_participant(who)
 		}
 	}
 }
 
+
 decl_event!(
-	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId {
-		DealerJoined(AccountId),
-		PlayerJoined(AccountId),
+	pub enum Event<T> where AccountId = <T as system::Trait>::AccountId,
+							Balance = <T as balances::Trait>::Balance {
+		Prize(AccountId, Balance),
 	}
 );
+
+impl<T: Trait> Module<T> {
+
+	fn refill_chips(who: T::AccountId, buy_in : T::Balance) -> Result {
+		let _ = <balances::Module<T> as Currency<_>>::withdraw(
+			&who, buy_in, WithdrawReason::Transfer,
+			ExistenceRequirement::KeepAlive)?;
+
+		<Stacks<T>>::insert(&who, &buy_in);
+		Ok(())
+	}
+
+	fn calculate_pot() -> T::Balance {
+		let dealer = <Dealer<T>>::get().unwrap();
+		let player = <Player<T>>::get().unwrap();
+
+		let d_bet = <Bets<T>>::take(&dealer);
+		let p_bet = <Bets<T>>::take(&player);
+
+		<Stacks<T>>::mutate(&dealer, |v| *v -= d_bet);
+		<Stacks<T>>::mutate(&player, |v| *v -= p_bet);
+
+		<Pot<T>>::take() + d_bet + p_bet
+	}
+
+	fn reveal_hand(who: T::AccountId, hand_secret: Vec<u8>) -> Result {
+		runtime_io::print("Revealing hand cards");
+
+		let hand_key  = <Keys<T>>::get(&who).hand;
+		let encrypted = <HandCards<T>>::get(&who);
+		let decrypted = naive_rsa::decrypt(&encrypted, &hand_key[..], &hand_secret[..])?;
+
+		<OpenCards<T>>::insert(&who, decrypted);
+		Ok(())
+	}
+
+	fn perform_fold(who: T::AccountId) -> Result {
+		let dealer = <Dealer<T>>::get().unwrap();
+		let player = <Player<T>>::get().unwrap();
+
+		let prize = Self::calculate_pot();
+
+		let winner = if who == dealer { player } else { dealer };
+		{
+			let prize = prize.clone();
+			<Stacks<T>>::mutate(&winner, move |v| *v += prize);
+		}
+
+		Self::deposit_event(RawEvent::Prize(winner, prize.clone()));
+		Self::reset_round();
+		Ok(())
+	}
+
+	fn remove_participant(who: T::AccountId) -> Result {
+		//This version is for 2 participants maximum;
+		//and no game can contain only a player without a dealer,
+		//so either we remove the player, or replace the dealer
+		let player = <Player<T>>::get();
+		let who = Some(who);
+
+		if player != who {
+			let dealer = <Dealer<T>>::get();
+			if dealer != who {
+				return Err("The account is not a participant of this game");
+			}
+			if let Some(player) = player {
+				<Dealer<T>>::put(player);
+			};
+		}
+		<Player<T>>::kill();
+
+		Ok(())
+	}
+
+	fn reset_idle(who_waits: T::AccountId) {
+		<Bets<T>>::remove(&who_waits);
+
+		<Dealer<T>>::get().into_iter().for_each(<Keys<T>>::remove);
+		<Player<T>>::get().into_iter().for_each(<Keys<T>>::remove);
+	}
+
+	fn reset_round() {
+		let dealer = <Dealer<T>>::get().unwrap();
+		let player = <Player<T>>::get().unwrap();
+
+		vec![&dealer, &player]
+			.iter().for_each(|k| {
+				<Keys<T>>::remove(*k);
+				<Secrets<T>>::remove(*k);
+				<HandCards<T>>::remove(*k);
+				<OpenCards<T>>::remove(*k);
+			});
+
+		<FlopCards<T>>::kill();
+		<TurnCards<T>>::kill();
+		<RiverCards<T>>::kill();
+		<SharedCards<T>>::kill();
+		<Stage<T>>::kill();
+
+		//Swapping roles
+		<Dealer<T>>::put(player);
+		<Player<T>>::put(dealer);
+	}
+
+}
+
+//todo: optimize some places using `exists`
+
+//todo: optimize some origin/who places
+
+//todo: invent something to remove duplicated code for dealer/player

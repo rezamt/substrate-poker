@@ -4,13 +4,15 @@ require('semantic-ui-css/semantic.min.css');
 import { Icon, Label, Header, Segment, Button } from 'semantic-ui-react';
 import { Bond } from 'oo7';
 import { If } from 'oo7-react';
-import { calls, post, runtime } from 'oo7-substrate';
 import { Identicon } from 'polkadot-identicon';
 import { SignerBond } from './AccountIdBond.jsx';
 import { TransactButton } from './TransactButton.jsx';
 import { BlinkingLabel } from './BlinkingLabel.jsx';
 import { Pretty } from './Pretty';
 import { SvgRow } from './SvgRow';
+
+import { calls, post, runtime } from 'oo7-substrate';
+import {secretStore} from 'oo7-substrate/src/secretStore.js';
 
 const bufEq = require('arraybuffer-equal');
 
@@ -34,6 +36,7 @@ export class GameSegment extends React.Component {
     constructor () {
         super();
         window.game = this;
+        this.accounts = secretStore();
 
         this.user = new Bond;
         this.isLoggedIn = (new Bond).default(false);
@@ -80,7 +83,7 @@ export class GameSegment extends React.Component {
                     this.handCardsAreDealt.then(dealt => {
                         console.log("Joining the game");
                         keys.generate();
-                        this.requestCards();
+                        this.requestPreflop();
                     });
                 }
             });
@@ -95,7 +98,7 @@ export class GameSegment extends React.Component {
                             keys.load();
                         } else {
                             keys.generate();
-                            this.requestCards();
+                            this.requestPreflop();
                         }
                     });
                 }
@@ -117,10 +120,14 @@ export class GameSegment extends React.Component {
         }
     }
 
-    requestCards () {
+    leaveGame () {
+        console.log("LEAVING");
+    }
+
+    requestPreflop () {
         game.opponent.tie((other, id) => {
             if (other != null) {
-                console.log("Requesting dealing of cards");
+                console.log("Requesting a new round");
                 let tx = {
                     sender: this.user,
                     call: calls.poker.preflop(
@@ -133,7 +140,7 @@ export class GameSegment extends React.Component {
                 status.tie((s,id) => {
                     console.log(s);
                     if (s.confirmed || s.scheduled) {
-                        console.log("Cards dealing request registered");
+                        console.log("Request for a new round registered");
                         status.untie(id);
                     }
                 });
@@ -341,19 +348,15 @@ export class GameSegment extends React.Component {
     }
 
     displayParticipant (participant, markDealer) {
-        function printAccount(account) {
-            return runtime.indices.ss58Encode(runtime.indices.tryIndex(account));
-        }
-
         let content = <span>
-            <Label color="blue"><Pretty value={participant.map(printAccount)}/></Label>
+            <Label color="blue">
+                <Pretty value={participant.map(account => game.accounts.find(account).name)}/>
+            </Label>
             <Label><Pretty value={runtime.poker.stacks(participant)}/></Label>
             <If condition={bondsAccountsAreEqualAndNotNull(participant, this.user)}
                 then={<Label color="yellow">You</Label>}
                 else={<Label color="yellow">Opponent</Label>}/>
         </span>;
-
-        {/*<Identicon size='24' account={participant} />*/}
 
         return <table><tbody>
             <If condition={markDealer} then={<tr>
@@ -380,16 +383,38 @@ export class GameSegment extends React.Component {
     }
 
     displayBet (participant) {
-        return <div align="center">
-            <Label color="olive">Bet: <Pretty value={runtime.poker.bets(participant)}/></Label>
-        </div>
+        let bet = runtime.poker.bets(participant);
+        return <div align="center" style={{'height': '30px'}}>
+            <If condition={bet.map(v => v != 0)}
+                then={<Label color="olive">Bet: <Pretty value={bet}/></Label>}/>
+        </div>;
     }
 
     displayActions () {
         return <div align="center">
-            <TransactButton content="Next!" icon='game' tx={{
+            <TransactButton color="red" content="Leave" tx={{
+                sender: this.user,
+                call: calls.poker.leave()
+            }}/>
+            <TransactButton color="red" content="Fold" tx={{
+                sender: this.user,
+                call: calls.poker.fold()
+            }} size="massive"/>
+            <TransactButton color="yellow" content="Raise" tx={{
                 sender: this.user,
                     call: calls.poker.nextStage(this.stage.map(stage => {
+                    return keys.BONDS[stages.next(stage)].map(key => key.exponent);
+                }))
+            }} size="massive"/>
+            <TransactButton color="green" content="Call" tx={{
+                sender: this.user,
+                call: calls.poker.nextStage(this.stage.map(stage => {
+                    return keys.BONDS[stages.next(stage)].map(key => key.exponent);
+                }))
+            }} size="massive"/>
+            <TransactButton color="blue" content="Check" tx={{
+                sender: this.user,
+                call: calls.poker.nextStage(this.stage.map(stage => {
                     return keys.BONDS[stages.next(stage)].map(key => key.exponent);
                 }))
             }}/>
@@ -431,10 +456,15 @@ export class GameSegment extends React.Component {
             </Label>
         </div>;
     }
+
+    displayGameResult () {
+        return <Label>TODO: WINNER</Label>
+    }
 }
 
 //todo:
 //1. Try to use `bonds.me`, see this doc for details: https://wiki.parity.io/oo7-Parity-Examples
+//2. Implement codec for some structures. Though they are not actually used, they produce warnings.
 
 // const {} = require('oo7-react');
 // const {} = require('oo7-parity');
