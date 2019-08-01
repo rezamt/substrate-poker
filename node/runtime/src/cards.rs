@@ -24,7 +24,7 @@ pub struct Card {
 }
 
 impl Card {
-    pub fn validate(&self) -> bool {
+    pub fn is_valid(&self) -> bool {
         debug_assert!(self.nominal >= 1 && self.nominal <= 13);
         debug_assert!(self.suit >= 1 && self.suit <= 4);
 
@@ -52,10 +52,19 @@ pub fn spades(n: Nominal) -> Card {
 pub fn encode(cards: Vec<&Card>) -> Vec<u8> {
     cards.into_iter()
         .map(|card| {
-            card.validate();
+            card.is_valid();
             vec![card.nominal, card.suit]
         })
         .flatten()
+        .collect()
+}
+
+pub fn decode(bytes: &[u8]) -> Vec<Card> {
+    bytes.chunks(2)
+        .map(|pair| Card {
+            nominal: pair[0],
+            suit: pair[1]
+        })
         .collect()
 }
 
@@ -70,7 +79,7 @@ pub fn from_random(byte: u8) -> Card {
         suit: low % 4 + 1,
     };
 
-    card.validate();
+    card.is_valid();
     card
 }
 

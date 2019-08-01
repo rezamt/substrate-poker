@@ -214,10 +214,10 @@ decl_module! {
 			} else {
 				runtime_io::print("Registering participant's keys for the next stage");
 
-				let mut secrets = <Secrets<T>>::get(&who);
-				secrets.submit(stage, stage_secret);
-				debug_assert!(secrets.is_valid());
-				<Secrets<T>>::insert(&who, &secrets);
+				<Secrets<T>>::mutate(&who, |secrets| {
+					(*secrets).submit(stage, stage_secret);
+					debug_assert!(secrets.is_valid());
+				});
 
 				let dealer = <Dealer<T>>::get().unwrap();
 				let player = <Player<T>>::get().unwrap();
@@ -243,6 +243,10 @@ decl_module! {
 
 					let revealed = naive_rsa::decrypt(&hidden, &dealer_key[..], &dealer_secret[..])?;
 					let mut revealed = naive_rsa::decrypt(&revealed, &player_key[..], &player_secret[..])?;
+
+					if !cards::decode(&revealed[..]).into_iter().all(|card| card.is_valid()) {
+						return Err("Critical error: decrypted cards are invalid");
+					}
 
 					<SharedCards<T>>::mutate(|v| v.append(&mut revealed));
 
@@ -406,3 +410,5 @@ impl<T: Trait> Module<T> {
 //todo: optimize some origin/who places
 
 //todo: invent something to remove duplicated code for dealer/player
+
+//todo: reduce usage of `unwrap()`

@@ -1,16 +1,15 @@
-const PREFLOP = 0;
-const FLOP = 1;
-const TURN = 2;
-const RIVER = 3;
+const keys = require('./keys.js');
 
-export const STAGES = [PREFLOP, FLOP, TURN, RIVER];
-export const NAMES = ['preflop', 'flop', 'turn', 'river'];
+//Be careful, stage_ui = stage_node - 1
+const HAND = 0;  // 4 % 4 == 0, i.e. revealing hand cards after RIVER
+const FLOP = 1;  //PREFLOP at node side
+const TURN = 2;  //FLOP at node side
+const RIVER = 3; //TURN at node side
 
-export function next(stage) {
-    let result = (stage + 1) % (STAGES.length);
-    //PREFLOP follows after RIVER, what means
-    //that we are passing secret for PREFLOP stage,
-    //i.e. we are revealing our hand cards
-    console.log(`Next stage is ${result}`);
-    return result;
+export const STAGES = [HAND, FLOP, TURN, RIVER];
+export const NAMES = ['hand', 'flop', 'turn', 'river'];
+
+export function secretFromStage(stage) {
+    let next = stage % (STAGES.length);
+    return keys.BONDS[next].map(key => key.exponent);
 }

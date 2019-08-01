@@ -60,6 +60,14 @@ fn modular_exponentiation(mut base: U256, mut exponent: U256, modulus: U256) -> 
     result
 }
 
+#[allow(dead_code)]
+pub fn keypair_is_valid(pubkey: &[u8], privkey: &[u8]) -> bool {
+    let test_data = vec![1,2,3,5,7,11,13,17,19,23];
+    let encrypted = encrypt(&test_data[..], pubkey).unwrap();
+    let decrypted = decrypt(&encrypted[..], pubkey, privkey).unwrap();
+    decrypted == test_data
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,6 +93,14 @@ mod tests {
         let message: &[u8] = "Don't tell anybody.".as_bytes();
         let encrypted = encrypt(message, &PUBLIC_KEY).unwrap();
         let decrypted = decrypt(&encrypted, &PUBLIC_KEY, &PRIVATE_KEY).unwrap();
-        assert!(decrypted == message);
+        assert_eq!(decrypted, message);
+    }
+
+    #[test]
+    fn validation_works() {
+        assert!(keypair_is_valid(&PUBLIC_KEY, &PRIVATE_KEY));
+        assert!(!keypair_is_valid(&PRIVATE_KEY, &PUBLIC_KEY));
+        assert!(!keypair_is_valid(&PRIVATE_KEY, &PRIVATE_KEY));
+        assert!(!keypair_is_valid(&PUBLIC_KEY, &PUBLIC_KEY));
     }
 }

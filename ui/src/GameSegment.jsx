@@ -403,19 +403,19 @@ export class GameSegment extends React.Component {
             <TransactButton color="yellow" content="Raise" tx={{
                 sender: this.user,
                     call: calls.poker.nextStage(this.stage.map(stage => {
-                    return keys.BONDS[stages.next(stage)].map(key => key.exponent);
+                    return stages.secretFromStage(stage);
                 }))
             }} size="massive"/>
             <TransactButton color="green" content="Call" tx={{
                 sender: this.user,
                 call: calls.poker.nextStage(this.stage.map(stage => {
-                    return keys.BONDS[stages.next(stage)].map(key => key.exponent);
+                    return stages.secretFromStage(stage);
                 }))
             }} size="massive"/>
             <TransactButton color="blue" content="Check" tx={{
                 sender: this.user,
                 call: calls.poker.nextStage(this.stage.map(stage => {
-                    return keys.BONDS[stages.next(stage)].map(key => key.exponent);
+                    return stages.secretFromStage(stage);
                 }))
             }}/>
         </div>
