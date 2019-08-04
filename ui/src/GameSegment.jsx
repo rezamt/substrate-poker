@@ -8,6 +8,7 @@ import { Identicon } from 'polkadot-identicon';
 import { SignerBond } from './AccountIdBond.jsx';
 import { TransactButton } from './TransactButton.jsx';
 import { BlinkingLabel } from './BlinkingLabel.jsx';
+import { NotificationContainer } from 'react-notifications';
 import { Pretty } from './Pretty';
 import { SvgRow } from './SvgRow';
 
@@ -24,7 +25,7 @@ const keys = require('./keys.js');
 const stages = require('./stages.js');
 
 function accountsAreEqualAndNotNull(left, right) {
-    return left != null && right != null
+    return left !== null && right !== null
         && bufEq(left.buffer, right.buffer);
 }
 
@@ -56,8 +57,8 @@ export class GameSegment extends React.Component {
             }
         });
 
-        this.dealerIsJoined = this.dealer.map(d => d != null);
-        this.playerIsJoined = this.player.map(p => p != null);
+        this.dealerIsJoined = this.dealer.map(d => d !== null);
+        this.playerIsJoined = this.player.map(p => p !== null);
 
         this.isJoined = this.isDealer.map(d =>
             this.isPlayer.map(p =>
@@ -68,19 +69,19 @@ export class GameSegment extends React.Component {
         this.turnKey = new Bond();
         this.riverKey = new Bond();
 
-        this.handCards = runtime.poker.handCards(game.user);
+        this.pocketCards = runtime.poker.pocketCards(game.user);
         this.opponentCards = this.opponent.map(runtime.poker.openCards);
 
         this.sharedCards = runtime.poker.sharedCards;
         this.stage = runtime.poker.stage;
 
-        this.handCardsAreDealt = this.handCards.map(encrypted => encrypted.length !== 0);
+        this.pocketCardsAreDealt = this.pocketCards.map(encrypted => encrypted.length !== 0);
         this.opponentCardsAreRevealed = this.opponentCards.map(encrypted => encrypted.length !== 0);
 
         this.isJoined.tie(joined => {
             this.isLoggedIn.then(logged => {
                 if (joined && logged) { //joining a game while being logged in
-                    this.handCardsAreDealt.then(dealt => {
+                    this.pocketCardsAreDealt.then(dealt => {
                         console.log("Joining the game");
                         keys.generate();
                         this.requestPreflop();
@@ -92,7 +93,7 @@ export class GameSegment extends React.Component {
         this.isLoggedIn.tie(logged => {
             this.isJoined.then(joined => {
                 if (joined && logged) { //logging in while being joined to a game
-                    this.handCardsAreDealt.then(dealt => {
+                    this.pocketCardsAreDealt.then(dealt => {
                         console.log("Resuming to the game");
                         if (dealt) {
                             keys.load();
@@ -126,7 +127,7 @@ export class GameSegment extends React.Component {
 
     requestPreflop () {
         game.opponent.tie((other, id) => {
-            if (other != null) {
+            if (other !== null) {
                 console.log("Requesting a new round");
                 let tx = {
                     sender: this.user,
@@ -138,7 +139,6 @@ export class GameSegment extends React.Component {
                 };
                 let status = post(tx);
                 status.tie((s,id) => {
-                    console.log(s);
                     if (s.confirmed || s.scheduled) {
                         console.log("Request for a new round registered");
                         status.untie(id);
@@ -171,6 +171,7 @@ export class GameSegment extends React.Component {
                 </Header.Content>
             </Header>
             <div>
+                <NotificationContainer/>
                 {/* Logging in */}
                 <If condition={this.isLoggedOut} then={<span>
                     <div style={{ fontSize: 'small' }}>Please input account information:</div>
@@ -199,10 +200,10 @@ export class GameSegment extends React.Component {
                             <td> in this game</td>
                         </tr></tbody></table>
 
-                        <If condition={this.handCardsAreDealt}
+                        <If condition={this.pocketCardsAreDealt}
                             else={this.displayParticipant(this.dealer, false)}/>
                         <If condition={this.playerIsJoined} then={<div>
-                            <If condition={this.handCardsAreDealt}
+                            <If condition={this.pocketCardsAreDealt}
                                 else={this.displayParticipant(this.player, false)}/>
                             <p />
 
@@ -213,7 +214,7 @@ export class GameSegment extends React.Component {
                             }/>
                         </div>} else={
                             <If condition={this.isJoined} then={
-                                this.displayMessage("You are waiting at the table...")
+                                this.renderWaitingSection()
                             } else={<span>
                                 { this.displayMessage("One person is waiting at the table.") }
                                 { this.renderJoinGameSection() }
@@ -253,6 +254,21 @@ export class GameSegment extends React.Component {
         </div>;
     }
 
+    renderWaitingSection () {
+        return <div>
+            { this.displayMessage("You are waiting at the table...") }
+            <div style={{ paddingTop: '1em' }}>
+                <TransactButton tx={{
+                    sender: this.user,
+                    call: calls.poker.leaveGame(),
+                    compact: false,
+                    longevity: true
+                }} color="orange" icon="sign in"
+                   content="Leave"/>
+            </div>
+        </div>;
+    }
+
     renderJoinGameSection () {
         let buyIn = new Bond;
 
@@ -285,7 +301,7 @@ export class GameSegment extends React.Component {
             'paddingRight': '20px',
             'paddingBottom': '20px',
         }}>
-            <If condition={this.handCardsAreDealt} then={<span>
+            <If condition={this.pocketCardsAreDealt} then={<span>
                 {/*Players have received cards on their hands*/}
                 <table><tbody><tr>
                         <td>
@@ -297,7 +313,7 @@ export class GameSegment extends React.Component {
                             <tr height="30"><td></td></tr>
                             <tr><td>
                                 { this.displayBet(this.user) }
-                                { this.displayHandCards() }
+                                { this.displayPocketCards() }
                                 { this.displayParticipant(this.user, true)}
                             </td></tr></tbody></table>
                         </td>
@@ -347,12 +363,25 @@ export class GameSegment extends React.Component {
         </div>;
     }
 
+    displayParticipantProperty(participant, callback) {
+        return <Pretty value={participant.map(account => {
+            if (account !== null) {
+                return callback(account);
+            }
+            return "";
+        })}/>;
+    }
+
     displayParticipant (participant, markDealer) {
         let content = <span>
             <Label color="blue">
-                <Pretty value={participant.map(account => game.accounts.find(account).name)}/>
+                { this.displayParticipantProperty(participant,
+                    account => game.accounts.find(account).name) }
             </Label>
-            <Label><Pretty value={runtime.poker.stacks(participant)}/></Label>
+            <Label>
+                { this.displayParticipantProperty(participant,
+                    account => runtime.poker.stacks(account)) }
+            </Label>
             <If condition={bondsAccountsAreEqualAndNotNull(participant, this.user)}
                 then={<Label color="yellow">You</Label>}
                 else={<Label color="yellow">Opponent</Label>}/>
@@ -371,9 +400,9 @@ export class GameSegment extends React.Component {
         </tbody></table>;
     }
 
-    displayHandCards () {
+    displayPocketCards () {
         return SvgRow("hand",
-            this.handCards.map(encrypted =>
+            this.pocketCards.map(encrypted =>
                 keys.hand.map(key => {
                     let decrypted = decrypt(encrypted, key.modulus, key.exponent);
                     let cards = decode(decrypted);
@@ -385,7 +414,7 @@ export class GameSegment extends React.Component {
     displayBet (participant) {
         let bet = runtime.poker.bets(participant);
         return <div align="center" style={{'height': '30px'}}>
-            <If condition={bet.map(v => v != 0)}
+            <If condition={bet.map(v => v !== 0)}
                 then={<Label color="olive">Bet: <Pretty value={bet}/></Label>}/>
         </div>;
     }
@@ -394,7 +423,7 @@ export class GameSegment extends React.Component {
         return <div align="center">
             <TransactButton color="red" content="Leave" tx={{
                 sender: this.user,
-                call: calls.poker.leave()
+                call: calls.poker.leaveGameAnyway()
             }}/>
             <TransactButton color="red" content="Fold" tx={{
                 sender: this.user,

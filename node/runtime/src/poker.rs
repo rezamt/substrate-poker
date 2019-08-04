@@ -8,7 +8,6 @@ use system::ensure_signed;
 use rstd::prelude::*;
 
 use core::debug_assert;
-use runtime_io;
 
 use runtime_primitives::traits::Hash;
 use runtime_primitives::traits::As;
@@ -57,10 +56,10 @@ decl_storage! {
 		///Cards which are shared among participants
 		SharedCards get(shared_cards): Vec<u8>;
 
-		///Cards "on hand", private and non-visible before showdown
-		HandCards get(hand_cards): map T::AccountId => Vec<u8>;
+		///Cards "in the pocket", private and non-visible before showdown
+		PocketCards get(pocket_cards): map T::AccountId => Vec<u8>;
 
-		///Cards "on hand" which have been revealed by their owner
+		///Cards "in the pocket" which have been revealed by their owner
 		OpenCards get(open_cards): map T::AccountId => Vec<u8>;
 
 		///Shared cards are hidden and revealed by-stage when all
@@ -78,17 +77,17 @@ decl_module! {
 		fn create_game(origin, buy_in: T::Balance, big_blind: T::Balance) -> Result {
 			let who = ensure_signed(origin)?;
 
-			let dealer = <Dealer<T>>::get();
-			let player = <Player<T>>::get();
+			let dealer = Self::dealer();
+			let player = Self::player();
 
 			if dealer.is_some() || player.is_some() {
-				return Err("The game is already created, probably you can join.");
+				return Self::error(who, "The game is already created, probably you can join.");
 			}
 			if buy_in < big_blind {
-				return Err("Choose smaller blinds.");
+				return Self::error(who, "Choose smaller blinds.");
 			}
 
-			runtime_io::print("Dealer joins the game, waiting for a player...");
+			Self::announce("Dealer joins the game, waiting for a player...");
 			<Dealer<T>>::put(&who);
 
 			let small_blind = big_blind / T::Balance::sa(2);
@@ -100,24 +99,45 @@ decl_module! {
 		fn join_game(origin, buy_in: T::Balance) -> Result {
 			let who = ensure_signed(origin)?;
 
-			let dealer = <Dealer<T>>::get();
-			let player = <Player<T>>::get();
+			let dealer = Self::dealer();
+			let player = Self::player();
 
 			if dealer.is_none() {
-				return Err("There is nobody so far, you are free to set up the game.");
+				return Self::error(who, "There is nobody so far, you are free to set up the game.");
 			}
 			if player.is_some() {
-				return Err("Sorry man, no room.");
+				return Self::error(who, "Sorry man, no room.");
 			}
-			let (_, minimal_amount) = <Blinds<T>>::get();
+			let (_, minimal_amount) = Self::blinds();
 			if buy_in < minimal_amount {
-				return Err("Get some money first...");
+				return Self::error(who, "Get some money first...");
 			}
 
 			<Player<T>>::put(&who);
-			runtime_io::print("Player joins the game! It's gonna be hot!");
+			Self::announce("Player joins the game! It's gonna be hot!");
 
 			Self::refill_chips(who, buy_in)
+		}
+
+		fn leave_game_anyway(origin) -> Result {
+			let who = ensure_signed(origin)?;
+			if Self::stage() != stage::IDLE && Self::stage() != stage::SHOWDOWN {
+				Self::perform_fold(who.clone())?;
+			}
+			Self::remove_participant(who)
+		}
+
+		fn leave_game(origin) -> Result {
+			let who = ensure_signed(origin)?;
+			if Self::stage() != stage::IDLE {
+				return Self::error(who, "Can't quit while the game is in progress");
+			}
+
+			//for the case when we made a blind bet,
+			//but other player haven't yet
+			Self::reset_idle(&who);
+
+			Self::remove_participant(who)
 		}
 
 		fn preflop(origin,
@@ -127,10 +147,10 @@ decl_module! {
 				river_key: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
 
-			if <Keys<T>>::get(&who).is_initialized() {
-				Err("For current round, preflop stage is already initialized")
+			if Self::keys(&who).is_initialized() {
+				Self::error(who, "For current round, preflop stage is already initialized")
 			} else {
-				runtime_io::print("Registering participant's keys for preflop stage");
+				Self::info(who.clone(), "Registering participant's keys for preflop stage");
 
 				//All keys are received in big-endian format
 				let keys = keys::PublicStorage {
@@ -143,18 +163,18 @@ decl_module! {
 				debug_assert!(keys.is_valid());
 				<Keys<T>>::insert(&who, &keys);
 
-				let dealer = <Dealer<T>>::get().unwrap();
-				let player = <Player<T>>::get().unwrap();
+				let dealer = Self::dealer().unwrap();
+				let player = Self::player().unwrap();
 
-				let dealer_keys = <Keys<T>>::get(&dealer);
-				let player_keys = <Keys<T>>::get(&player);
+				let dealer_keys = Self::keys(&dealer);
+				let player_keys = Self::keys(&player);
 
 				if dealer_keys.is_initialized() && player_keys.is_initialized() {
 					//Since we can't store the state of cards deck in (visible) blocks,
 					//we have to deal all cards in one atomic transaction;
 					//then we encrypt flop, turn and river with public keys of all participants
 					//and we encrypt hand cards by public keys of corresponding player
-					runtime_io::print("Dealing cards for this round");
+					Self::info_all("Dealing cards for this round");
 
 					//This is fake random for my proof-of-concept;
 					//in future, it has to be replaced with off-chain random generation
@@ -181,10 +201,10 @@ decl_module! {
 					let river_cards  = cards::encode(vec![&cards[11]]);
 
 					let player_cards = naive_rsa::encrypt(&player_cards[..], &player_keys.hand[..])?;
-					<HandCards<T>>::insert(&player, player_cards);
+					<PocketCards<T>>::insert(&player, player_cards);
 
 					let dealer_cards = naive_rsa::encrypt(&dealer_cards[..], &dealer_keys.hand[..])?;
-					<HandCards<T>>::insert(&dealer, dealer_cards);
+					<PocketCards<T>>::insert(&dealer, dealer_cards);
 
 					let flop_cards = naive_rsa::encrypt(&flop_cards[..], &player_keys.flop[..])?;
 					let flop_cards = naive_rsa::encrypt(&flop_cards[..], &dealer_keys.flop[..])?;
@@ -202,10 +222,10 @@ decl_module! {
 					<Stage<T>>::put(stage::PREFLOP);
 					<BetsNow<T>>::put(&dealer);
 				} else {
-					runtime_io::print("Waiting for other participants to deal hand cards");
+					Self::info(who.clone(), "Waiting for other participants to deal hand cards");
 				}
 
-				let (small_blind, big_blind) = <Blinds<T>>::get();
+				let (small_blind, big_blind) = Self::blinds();
 				<BetLevel<T>>::put(big_blind.clone());
 
 				let blind_bet = if &who == &dealer {
@@ -222,13 +242,13 @@ decl_module! {
 		fn check(origin) -> Result {
 			let who = ensure_signed(origin)?;
 			if !Self::makes_bet_now(&who) {
-				return Err("Wait for your turn, please.");
+				return Self::error(who, "Wait for your turn, please.");
 			}
 
-			let level = <BetLevel<T>>::get();
+			let level = Self::bet_level();
 			if let Some(current) = level {
 				if current > Self::zero() {
-					return Err("There is already a bet, you can't check.");
+					return Self::error(who, "There is already a bet, you can't check.");
 				}
 			}
 
@@ -238,15 +258,15 @@ decl_module! {
 		fn call(origin) -> Result {
 			let who = ensure_signed(origin)?;
 			if !Self::makes_bet_now(&who) {
-				return Err("Wait for your turn, please.");
+				return Self::error(who, "Wait for your turn, please.");
 			}
 
-			let level = <BetLevel<T>>::get();
+			let level = Self::bet_level();
 			if level.is_none() || level == Some(Self::zero()) {
 				Self::perform_check(who, level.is_none())
 			} else {
 				let level = level.unwrap();
-				let stack = <Stacks<T>>::get(&who);
+				let stack = Self::stacks(&who);
 				if stack <= level {
 					<Bets<T>>::insert(&who, stack);
 					Self::deposit_event(RawEvent::AllIn(who));
@@ -272,30 +292,30 @@ decl_module! {
 		fn raise(origin, total: T::Balance) -> Result {
 			let who = ensure_signed(origin)?;
 			if !Self::makes_bet_now(&who) {
-				return Err("Wait for your turn, please.");
+				return Self::error(who, "Wait for your turn, please.");
 			}
 
-			let stack = <Stacks<T>>::get(&who);
+			let stack = Self::stacks(&who);
 			if total < stack {
-				return Err("You don't have enough chips for such a raise.");
+				return Self::error(who, "You don't have enough chips for such a raise.");
 			}
 
-			let level = <BetLevel<T>>::get().unwrap_or(Self::zero());
+			let level = Self::bet_level().unwrap_or(Self::zero());
 			if total <= level {
-				return Err("Raise must be more than the current bet (even if you go all-in).");
+				return Self::error(who, "Raise must be more than the current bet (even if you go all-in).");
 			}
 
 			if total == stack {
 				Self::deposit_event(RawEvent::AllIn(who.clone()));
 			} else {
 				if total < level * T::Balance::sa(2) {
-					return Err("Raise must be at least doubling the current bet.");
+					return Self::error(who, "Raise must be at least doubling the current bet.");
 				}
 
 				let diff = total - level;
-				let (_, big_blind) = <Blinds<T>>::get();
+				let (_, big_blind) = Self::blinds();
 				if diff < big_blind {
-					return Err("Raise must be at least equal to big blind.");
+					return Self::error(who, "Raise must be at least equal to big blind.");
 				}
 
 				Self::deposit_event(RawEvent::Raise(who.clone(), diff));
@@ -310,40 +330,40 @@ decl_module! {
 		fn next_stage(origin, stage_secret: Vec<u8>) -> Result {
 			let who = ensure_signed(origin)?;
 
-			let stage = <Stage<T>>::get() + 1;
+			let stage = Self::stage() + 1;
 			if stage == stage::SHOWDOWN {
 				//Current stage is the last, revealing hand cards
 				return Self::reveal_hand(who, stage_secret);
 			}
 
-			if <Secrets<T>>::get(&who).retrieve(stage).is_some() {
-				Err("The next stage is already initialized for this player")
+			if Self::secrets(&who).retrieve(stage).is_some() {
+				Self::error(who, "The next stage is already initialized for this player")
 			} else {
-				runtime_io::print("Registering participant's keys for the next stage");
+				Self::info(who.clone(), "Registering participant's keys for the next stage");
 
 				<Secrets<T>>::mutate(&who, |secrets| {
 					(*secrets).submit(stage, stage_secret);
 					debug_assert!(secrets.is_valid());
 				});
 
-				let dealer = <Dealer<T>>::get().unwrap();
-				let player = <Player<T>>::get().unwrap();
+				let dealer = Self::dealer().unwrap();
+				let player = Self::player().unwrap();
 
-				let dealer_secret = <Secrets<T>>::get(&dealer).retrieve(stage);
-				let player_secret = <Secrets<T>>::get(&player).retrieve(stage);
+				let dealer_secret = Self::secrets(&dealer).retrieve(stage);
+				let player_secret = Self::secrets(&player).retrieve(stage);
 
 				if dealer_secret.is_some() && player_secret.is_some() {
-					runtime_io::print("Revealing cards of the next stage");
+					Self::info_all("Revealing cards of the next stage");
 					let dealer_secret = dealer_secret.unwrap();
 					let player_secret = player_secret.unwrap();
 
-					let dealer_key = <Keys<T>>::get(&dealer).retrieve(stage);
-					let player_key = <Keys<T>>::get(&player).retrieve(stage);
+					let dealer_key = Self::keys(&dealer).retrieve(stage);
+					let player_key = Self::keys(&player).retrieve(stage);
 
 					let hidden = match stage {
-						stage::FLOP  => <FlopCards<T>>::get(),
-						stage::TURN  => <TurnCards<T>>::get(),
-						stage::RIVER => <RiverCards<T>>::get(),
+						stage::FLOP  => Self::flop_cards(),
+						stage::TURN  => Self::turn_cards(),
+						stage::RIVER => Self::river_cards(),
 
 						_ => unreachable!()
 					};
@@ -352,7 +372,7 @@ decl_module! {
 					let mut revealed = naive_rsa::decrypt(&revealed, &player_key[..], &player_secret[..])?;
 
 					if !cards::decode(&revealed[..]).into_iter().all(|card| card.is_valid()) {
-						return Err("Critical error: decrypted cards are invalid");
+						return Self::error_all("Critical error: decrypted cards are invalid");
 					}
 
 					<SharedCards<T>>::mutate(|v| v.append(&mut revealed));
@@ -366,7 +386,7 @@ decl_module! {
 					//for current stage. Also we can do it in current implementation
 					//after receiving dealer's secret (because his secret is last of applied),
 					//but for simplicity we wait for all in PoC
-					runtime_io::print("Waiting for other participants to deal next stage");
+					Self::info(who, "Waiting for other participants to deal next stage");
 					Ok(())
 				}
 			}
@@ -375,27 +395,6 @@ decl_module! {
 		fn fold(origin) -> Result {
 			let who = ensure_signed(origin)?;
 			Self::perform_fold(who)
-		}
-
-		fn leave(origin) -> Result {
-			let who = ensure_signed(origin)?;
-			if <Stage<T>>::get() != stage::IDLE {
-				Self::perform_fold(who.clone())?;
-			}
-			Self::remove_participant(who)
-		}
-
-		fn quit(origin) -> Result {
-			let who = ensure_signed(origin)?;
-			if <Stage<T>>::get() != stage::IDLE {
-				return Err("Can't quit while the game is in progress");
-			}
-
-			//for the case when we made a blind bet,
-			//but other player haven't yet
-			Self::reset_idle(&who);
-
-			Self::remove_participant(who)
 		}
 	}
 }
@@ -406,6 +405,14 @@ decl_event!(
 							Balance = <T as balances::Trait>::Balance {
 		///Auxiliary events; they are redundant and not necessary,
 		///but provide better user experience
+		Announcement(Vec<u8>),
+		InfoMessage(Option<AccountId>, Vec<u8>),
+		ErrorMessage(Option<AccountId>, Vec<u8>),
+
+		NewParticipant(AccountId, Balance),
+		NewDealer(AccountId),
+		ParticipantLeft(AccountId),
+
 		Call(AccountId),
 		Check(AccountId),
 		Raise(AccountId, Balance),
@@ -416,23 +423,25 @@ decl_event!(
 
 impl<T: Trait> Module<T> {
 
-	fn refill_chips(who: T::AccountId, buy_in : T::Balance) -> Result {
+	fn refill_chips(who: T::AccountId, buy_in: T::Balance) -> Result {
 		let _ = <balances::Module<T> as Currency<_>>::withdraw(
 			&who, buy_in, WithdrawReason::Transfer,
 			ExistenceRequirement::KeepAlive)?;
 
 		<Stacks<T>>::insert(&who, &buy_in);
+		Self::deposit_event(RawEvent::NewParticipant(who, buy_in));
 		Ok(())
 	}
 
 	fn reveal_hand(who: T::AccountId, hand_secret: Vec<u8>) -> Result {
-		runtime_io::print("Revealing hand cards");
+		Self::announce("Revealing pocket cards");
 
-		let hand_key  = <Keys<T>>::get(&who).hand;
-		let encrypted = <HandCards<T>>::get(&who);
+		let hand_key  = Self::keys(&who).hand;
+		let encrypted = Self::pocket_cards(&who);
 		let decrypted = naive_rsa::decrypt(&encrypted, &hand_key[..], &hand_secret[..])?;
 
 		<OpenCards<T>>::insert(&who, decrypted);
+		<Stage<T>>::put(stage::SHOWDOWN);
 		Ok(())
 	}
 
@@ -449,8 +458,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn perform_fold(who: T::AccountId) -> Result {
-		let dealer = <Dealer<T>>::get().unwrap();
-		let player = <Player<T>>::get().unwrap();
+		let dealer = Self::dealer().unwrap();
+		let player = Self::player().unwrap();
 
 		let prize = Self::calculate_pot();
 
@@ -469,21 +478,55 @@ impl<T: Trait> Module<T> {
 		//This version is for 2 participants maximum;
 		//and no game can contain only a player without a dealer,
 		//so either we remove the player, or replace the dealer
-		let player = <Player<T>>::get();
-		let who = Some(who);
+		let player = Self::player();
+		let target = Some(who.clone());
 
-		if player != who {
-			let dealer = <Dealer<T>>::get();
-			if dealer != who {
-				return Err("The account is not a participant of this game");
+		let stack = <Stacks<T>>::take(&who);
+		let _ = <balances::Module<T> as Currency<_>>::deposit_into_existing(&who, stack)?;
+
+		if player != target {
+			if Self::dealer() != target {
+				return Self::error(who, "The account is not a participant of this game");
 			}
 			if let Some(player) = player {
+				Self::deposit_event(RawEvent::NewDealer(player.clone()));
 				<Dealer<T>>::put(player);
+			} else {
+				<Dealer<T>>::kill();
 			};
 		}
 		<Player<T>>::kill();
 
+		Self::deposit_event(RawEvent::ParticipantLeft(who));
+
 		Ok(())
+	}
+
+	fn error(who: T::AccountId, message: &'static str) -> Result {
+		let bytes = message.as_bytes().to_vec();
+		Self::deposit_event(RawEvent::ErrorMessage(Some(who), bytes));
+		Err(message)
+	}
+
+	fn info(who: T::AccountId, message: &'static str) {
+		let bytes = message.as_bytes().to_vec();
+		Self::deposit_event(RawEvent::InfoMessage(Some(who), bytes));
+	}
+
+	fn error_all(message: &'static str) -> Result {
+		let bytes = message.as_bytes().to_vec();
+		Self::deposit_event(RawEvent::ErrorMessage(None, bytes));
+		Err(message)
+	}
+
+	fn info_all(message: &'static str) {
+		let bytes = message.as_bytes().to_vec();
+		Self::deposit_event(RawEvent::InfoMessage(None, bytes));
+	}
+
+	fn announce(message: &'static str) {
+		let bytes = message.as_bytes().to_vec();
+		Self::deposit_event(RawEvent::Announcement(bytes));
 	}
 
 	///Auxiliary functions
@@ -493,18 +536,18 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn opponent(who: &T::AccountId) -> T::AccountId {
-		let dealer = <Dealer<T>>::get().unwrap();
+		let dealer = Self::dealer().unwrap();
 
 		if &dealer == who {
-			<Player<T>>::get().unwrap()
+			Self::player().unwrap()
 		} else {
 			dealer
 		}
 	}
 
 	fn calculate_pot() -> T::Balance {
-		let dealer = <Dealer<T>>::get().unwrap();
-		let player = <Player<T>>::get().unwrap();
+		let dealer = Self::dealer().unwrap();
+		let player = Self::player().unwrap();
 
 		let d_bet = <Bets<T>>::take(&dealer);
 		let p_bet = <Bets<T>>::take(&player);
@@ -516,41 +559,41 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn makes_bet_now(who: &T::AccountId) -> bool {
-		let expected = <BetsNow<T>>::get();
+		let expected = Self::bets_now();
 		expected.is_some() && who == &expected.unwrap()
 	}
 
 	///Special rule in Poker
 	fn is_option_available(who: &T::AccountId, bet: T::Balance) -> bool {
-		if <Stage<T>>::get() != stage::PREFLOP {
+		if Self::stage() != stage::PREFLOP {
 			return false;
 		}
-		let (_, big_blind) = <Blinds<T>>::get();
+		let (_, big_blind) = Self::blinds();
 		if bet != big_blind {
 			return false;
 		}
 
 		//check should occur at small blind position
 		//in case of more than 2 participants, it is not necessary a dealer
-		who == &<Dealer<T>>::get().unwrap()
+		who == &Self::dealer().unwrap()
 	}
 
 	fn reset_idle(who_waits: &T::AccountId) {
 		<Bets<T>>::remove(who_waits);
 
-		<Dealer<T>>::get().into_iter().for_each(<Keys<T>>::remove);
-		<Player<T>>::get().into_iter().for_each(<Keys<T>>::remove);
+		Self::dealer().into_iter().for_each(<Keys<T>>::remove);
+		Self::player().into_iter().for_each(<Keys<T>>::remove);
 	}
 
 	fn reset_round() {
-		let dealer = <Dealer<T>>::get().unwrap();
-		let player = <Player<T>>::get().unwrap();
+		let dealer = Self::dealer().unwrap();
+		let player = Self::player().unwrap();
 
 		vec![&dealer, &player]
 			.iter().for_each(|k| {
 			<Keys<T>>::remove(*k);
 			<Secrets<T>>::remove(*k);
-			<HandCards<T>>::remove(*k);
+			<PocketCards<T>>::remove(*k);
 			<OpenCards<T>>::remove(*k);
 		});
 
@@ -575,3 +618,7 @@ impl<T: Trait> Module<T> {
 //todo: invent something to remove duplicated code for dealer/player
 
 //todo: reduce usage of `unwrap()`
+
+//todo: proper input-output of money to the game:
+//1. reserve balance instead of withdrawal at the moment of joining
+//2. unreserve balance + deposit/withdraw difference when leaving
