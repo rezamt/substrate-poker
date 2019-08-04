@@ -1,13 +1,14 @@
 import React from 'react';
+
 require('semantic-ui-css/semantic.min.css');
 
 import { Icon, Label, Header, Segment, Button } from 'semantic-ui-react';
 import { Bond } from 'oo7';
-import { If } from 'oo7-react';
-import { Identicon } from 'polkadot-identicon';
+import { If, Rspan } from 'oo7-react';
 import { SignerBond } from './AccountIdBond.jsx';
 import { TransactButton } from './TransactButton.jsx';
 import { BlinkingLabel } from './BlinkingLabel.jsx';
+import { RaiseSelector } from './RaiseSelector.jsx';
 import { NotificationContainer } from 'react-notifications';
 import { Pretty } from './Pretty';
 import { SvgRow } from './SvgRow';
@@ -34,8 +35,8 @@ function bondsAccountsAreEqualAndNotNull(left, right) {
 }
 
 export class GameSegment extends React.Component {
-    constructor () {
-        super();
+    constructor (props) {
+        super(props);
         window.game = this;
         this.accounts = secretStore();
 
@@ -119,10 +120,6 @@ export class GameSegment extends React.Component {
         if (event.key === "Enter" && game.user.isReady()) {
             game.logIn();
         }
-    }
-
-    leaveGame () {
-        console.log("LEAVING");
     }
 
     requestPreflop () {
@@ -421,33 +418,55 @@ export class GameSegment extends React.Component {
 
     displayActions () {
         return <div align="center">
-            <TransactButton color="red" content="Leave" tx={{
-                sender: this.user,
-                call: calls.poker.leaveGameAnyway()
-            }}/>
-            <TransactButton color="red" content="Fold" tx={{
-                sender: this.user,
-                call: calls.poker.fold()
-            }} size="massive"/>
-            <TransactButton color="yellow" content="Raise" tx={{
-                sender: this.user,
-                    call: calls.poker.nextStage(this.stage.map(stage => {
-                    return stages.secretFromStage(stage);
-                }))
-            }} size="massive"/>
-            <TransactButton color="green" content="Call" tx={{
-                sender: this.user,
-                call: calls.poker.nextStage(this.stage.map(stage => {
-                    return stages.secretFromStage(stage);
-                }))
-            }} size="massive"/>
-            <TransactButton color="blue" content="Check" tx={{
-                sender: this.user,
-                call: calls.poker.nextStage(this.stage.map(stage => {
-                    return stages.secretFromStage(stage);
-                }))
-            }}/>
-        </div>
+            <table><tbody>
+                <tr><td>
+                    <TransactButton color="red" content="Leave" tx={{
+                        sender: this.user,
+                        call: calls.poker.leaveGameAnyway()
+                    }}/>
+                    <TransactButton color="red" content="Fold" tx={{
+                        sender: this.user,
+                        call: calls.poker.fold()
+                    }} size="massive"/>
+                    <TransactButton color="yellow" content="Raise" tx={{
+                        sender: this.user,
+                        call: calls.poker.raise(50)
+                        // call: calls.poker.nextStage(this.stage.map(stage => {
+                        //     return stages.secretFromStage(stage);
+                        // }))
+                    }} size="massive"/>
+                    <TransactButton color="green" content="Call" tx={{
+                        sender: this.user,
+                        call: calls.poker.call()
+                        // call: calls.poker.nextStage(this.stage.map(stage => {
+                        //     return stages.secretFromStage(stage);
+                        // }))
+                    }} size="massive"/>
+                    <TransactButton color="blue" content="Check" tx={{
+                        sender: this.user,
+                        call: calls.poker.check()
+                        // call: calls.poker.nextStage(this.stage.map(stage => {
+                        //     return stages.secretFromStage(stage);
+                        // }))
+                    }}/>
+                </td></tr><tr><td>
+                    <Rspan className="value">{
+                        runtime.poker.betLevel.map(level => {
+                            return runtime.poker.blinds.map(blinds => {
+                                return runtime.poker.stacks(game.user).map(stack => {
+                                    let minRaise = Math.max(level, blinds[0][1]);
+                                    let maxRaise = stack.valueOf();
+
+                                    return <RaiseSelector
+                                        maxValue={maxRaise}
+                                        minValue={minRaise}
+                                        default={minRaise}
+                                    />;
+                        })})})
+                    }</Rspan>
+                </td></tr>
+            </tbody></table>
+        </div>;
     }
 
     displayOpponentCards () {
@@ -494,6 +513,7 @@ export class GameSegment extends React.Component {
 //todo:
 //1. Try to use `bonds.me`, see this doc for details: https://wiki.parity.io/oo7-Parity-Examples
 //2. Implement codec for some structures. Though they are not actually used, they produce warnings.
+//3. Remove direct state mutation and use `setState()`!
 
 // const {} = require('oo7-react');
 // const {} = require('oo7-parity');

@@ -81,10 +81,10 @@ decl_module! {
 			let player = Self::player();
 
 			if dealer.is_some() || player.is_some() {
-				return Self::error(who, "The game is already created, probably you can join.");
+				return Self::error(who, "The game is already created, probably you can join");
 			}
 			if buy_in < big_blind {
-				return Self::error(who, "Choose smaller blinds.");
+				return Self::error(who, "Choose smaller blinds");
 			}
 
 			Self::announce("Dealer joins the game, waiting for a player...");
@@ -296,13 +296,13 @@ decl_module! {
 			}
 
 			let stack = Self::stacks(&who);
-			if total < stack {
+			if total > stack {
 				return Self::error(who, "You don't have enough chips for such a raise.");
 			}
 
 			let level = Self::bet_level().unwrap_or(Self::zero());
 			if total <= level {
-				return Self::error(who, "Raise must be more than the current bet (even if you go all-in).");
+				return Self::error(who, "Raise must be more than the current bet.");
 			}
 
 			if total == stack {
@@ -372,7 +372,7 @@ decl_module! {
 					let mut revealed = naive_rsa::decrypt(&revealed, &player_key[..], &player_secret[..])?;
 
 					if !cards::decode(&revealed[..]).into_iter().all(|card| card.is_valid()) {
-						return Self::error_all("Critical error: decrypted cards are invalid");
+						return Self::error_all("Critical error: decrypted cards are invalid!");
 					}
 
 					<SharedCards<T>>::mutate(|v| v.append(&mut revealed));

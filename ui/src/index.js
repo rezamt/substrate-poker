@@ -1,5 +1,6 @@
 import 'semantic-ui-css/semantic.min.css';
 import 'react-notifications/lib/notifications.css';
+import 'react-input-range/lib/css/index.css';
 import React from 'react';
 import {render} from 'react-dom';
 import {App} from './app.jsx';
