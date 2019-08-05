@@ -56,6 +56,7 @@ impl RevealedSecrets {
             FLOP  => self.flop,
             TURN  => self.turn,
             RIVER => self.river,
+            SHOWDOWN => self.hand,
 
             _ => panic!("Illegal argument")
         }
@@ -66,6 +67,7 @@ impl RevealedSecrets {
             FLOP  => self.flop  = Some(secret),
             TURN  => self.turn  = Some(secret),
             RIVER => self.river = Some(secret),
+            SHOWDOWN => self.hand = Some(secret),
 
             _ => panic!("Illegal argument")
         }

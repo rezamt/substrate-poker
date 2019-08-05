@@ -36,6 +36,8 @@ async function main () {
                     NotificationManager.info(`${name(event)} becomes new dealer`);
                 } else if (event.method === "ParticipantLeft") {
                     NotificationManager.warning(`${name(event)} left the game`);
+                } else if (event.method === "AllIn") {
+                    NotificationManager.warning(`${name(event)} goes all-in!`);
                 } else if (event.method === "Raise") {
                     let diff = event.data[1];
                     NotificationManager.warning(`${name(event)} bets ${diff} more`);

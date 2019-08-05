@@ -247,7 +247,7 @@ decl_module! {
 
 			let level = Self::bet_level();
 			if let Some(current) = level {
-				if current > Self::zero() {
+				if current > Self::zero() && !Self::is_option_available(&who, current) {
 					return Self::error(who, "There is already a bet, you can't check.");
 				}
 			}
@@ -278,7 +278,7 @@ decl_module! {
 					Self::deposit_event(RawEvent::Call(who.clone()));
 
 					//previous move was either raise or big blind
-					if Self::is_option_available(&who, level) {
+					if Self::is_option_available(&Self::opponent(&who), level) {
 						<BetsNow<T>>::put(Self::opponent(&who));
 					} else {
 						<BetsNow<T>>::kill();
@@ -331,10 +331,6 @@ decl_module! {
 			let who = ensure_signed(origin)?;
 
 			let stage = Self::stage() + 1;
-			if stage == stage::SHOWDOWN {
-				//Current stage is the last, revealing hand cards
-				return Self::reveal_hand(who, stage_secret);
-			}
 
 			if Self::secrets(&who).retrieve(stage).is_some() {
 				Self::error(who, "The next stage is already initialized for this player")
@@ -353,9 +349,18 @@ decl_module! {
 				let player_secret = Self::secrets(&player).retrieve(stage);
 
 				if dealer_secret.is_some() && player_secret.is_some() {
-					Self::info_all("Revealing cards of the next stage");
 					let dealer_secret = dealer_secret.unwrap();
 					let player_secret = player_secret.unwrap();
+
+					if stage == stage::SHOWDOWN {
+						Self::reveal_hand(dealer, dealer_secret)?;
+						Self::reveal_hand(player, player_secret)?;
+						<Stage<T>>::put(stage);
+						//todo: determine winner
+						return Ok(());
+					}
+
+					Self::info_all("Revealing cards of the next stage");
 
 					let dealer_key = Self::keys(&dealer).retrieve(stage);
 					let player_key = Self::keys(&player).retrieve(stage);
@@ -441,7 +446,6 @@ impl<T: Trait> Module<T> {
 		let decrypted = naive_rsa::decrypt(&encrypted, &hand_key[..], &hand_secret[..])?;
 
 		<OpenCards<T>>::insert(&who, decrypted);
-		<Stage<T>>::put(stage::SHOWDOWN);
 		Ok(())
 	}
 
@@ -564,18 +568,16 @@ impl<T: Trait> Module<T> {
 	}
 
 	///Special rule in Poker
-	fn is_option_available(who: &T::AccountId, bet: T::Balance) -> bool {
+	fn is_option_available(who: &T::AccountId, level: T::Balance) -> bool {
 		if Self::stage() != stage::PREFLOP {
 			return false;
 		}
 		let (_, big_blind) = Self::blinds();
-		if bet != big_blind {
+		if level != big_blind {
 			return false;
 		}
 
-		//check should occur at small blind position
-		//in case of more than 2 participants, it is not necessary a dealer
-		who == &Self::dealer().unwrap()
+		who == &Self::player().unwrap()
 	}
 
 	fn reset_idle(who_waits: &T::AccountId) {

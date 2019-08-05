@@ -76,6 +76,9 @@ export class GameSegment extends React.Component {
         this.sharedCards = runtime.poker.sharedCards;
         this.stage = runtime.poker.stage;
 
+        this.raise = new Bond();
+        this.betsAreMade = runtime.poker.betsNow.map(who => who === null);
+
         this.pocketCardsAreDealt = this.pocketCards.map(encrypted => encrypted.length !== 0);
         this.opponentCardsAreRevealed = this.opponentCards.map(encrypted => encrypted.length !== 0);
 
@@ -105,6 +108,10 @@ export class GameSegment extends React.Component {
                     });
                 }
             });
+        });
+
+        this.betsAreMade.tie(playersAreReady => {
+            this.requestNextStage(playersAreReady)
         });
     }
 
@@ -146,6 +153,25 @@ export class GameSegment extends React.Component {
                 }
             }
         });
+    }
+
+    requestNextStage (playersAreReady) {
+        if (playersAreReady) {
+            let tx = {
+                sender: this.user,
+                call: calls.poker.nextStage(this.stage.map(stage => {
+                    return stages.secretFromStage(stage);
+                }))
+            };
+            let status = post(tx);
+            game.nextStageRequested = true;
+            status.tie((s,id) => {
+                if (s.confirmed || s.scheduled) {
+                    console.log("Request for a new stage registered");
+                }
+                game.nextStageRequested = false;
+            });
+        }
     }
 
     render () {
@@ -315,7 +341,7 @@ export class GameSegment extends React.Component {
                             </td></tr></tbody></table>
                         </td>
                         <td>
-                            <table><tbody><tr><td>
+                            <table><tbody><tr height="230"><td>
                                 <div style={{
                                     'paddingLeft': '24px'}}>
                                     <div style={{
@@ -333,7 +359,13 @@ export class GameSegment extends React.Component {
                                     </div>
                                 </div>
                             </td></tr><tr><td>
-                                { this.displayActions() }
+                                <div align="center">
+                                    <If condition={bondsAccountsAreEqualAndNotNull(runtime.poker.betsNow, game.user)}
+                                        then={this.displayActions()}
+                                        else={<Label color="blue">
+                                            Waiting for opponent's decision
+                                        </Label>}/>
+                                </div>
                             </td></tr></tbody></table>
                         </td>
                 </tr></tbody></table>
@@ -417,56 +449,50 @@ export class GameSegment extends React.Component {
     }
 
     displayActions () {
-        return <div align="center">
-            <table><tbody>
-                <tr><td>
-                    <TransactButton color="red" content="Leave" tx={{
-                        sender: this.user,
-                        call: calls.poker.leaveGameAnyway()
-                    }}/>
-                    <TransactButton color="red" content="Fold" tx={{
-                        sender: this.user,
-                        call: calls.poker.fold()
-                    }} size="massive"/>
-                    <TransactButton color="yellow" content="Raise" tx={{
-                        sender: this.user,
-                        call: calls.poker.raise(50)
-                        // call: calls.poker.nextStage(this.stage.map(stage => {
-                        //     return stages.secretFromStage(stage);
-                        // }))
-                    }} size="massive"/>
-                    <TransactButton color="green" content="Call" tx={{
-                        sender: this.user,
-                        call: calls.poker.call()
-                        // call: calls.poker.nextStage(this.stage.map(stage => {
-                        //     return stages.secretFromStage(stage);
-                        // }))
-                    }} size="massive"/>
-                    <TransactButton color="blue" content="Check" tx={{
-                        sender: this.user,
-                        call: calls.poker.check()
-                        // call: calls.poker.nextStage(this.stage.map(stage => {
-                        //     return stages.secretFromStage(stage);
-                        // }))
-                    }}/>
-                </td></tr><tr><td>
-                    <Rspan className="value">{
-                        runtime.poker.betLevel.map(level => {
-                            return runtime.poker.blinds.map(blinds => {
-                                return runtime.poker.stacks(game.user).map(stack => {
-                                    let minRaise = Math.max(level, blinds[0][1]);
+        return <table><tbody>
+            <tr><td>
+                <TransactButton color="red" content="Leave" tx={{
+                    sender: this.user,
+                    call: calls.poker.leaveGameAnyway()
+                }}/>
+                <TransactButton color="red" content="Fold" tx={{
+                    sender: this.user,
+                    call: calls.poker.fold()
+                }} size="massive"/>
+                <TransactButton color="yellow" content="Raise" tx={{
+                    sender: this.user,
+                    call: calls.poker.raise(game.raise)
+                }} size="massive"/>
+                <TransactButton color="green" content="Call" tx={{
+                    sender: this.user,
+                    call: calls.poker.call()
+                }} size="massive"/>
+                <TransactButton color="blue" content="Check" tx={{
+                    sender: this.user,
+                    call: calls.poker.check()
+                }}/>
+            </td></tr><tr><td>
+                <Rspan className="value">{
+                    runtime.poker.betLevel.map(level => {
+                        return runtime.poker.blinds.map(blinds => {
+                            return runtime.poker.stacks(game.user).map(stack => {
+                                if (level >= stack) {
+                                    game.raise.reset();
+                                    return <span/>;
+                                } else {
                                     let maxRaise = stack.valueOf();
-
+                                    let minRaise = Math.min(maxRaise,
+                                        level + Math.max(level, blinds[0][1]));
                                     return <RaiseSelector
                                         maxValue={maxRaise}
                                         minValue={minRaise}
                                         default={minRaise}
                                     />;
-                        })})})
-                    }</Rspan>
-                </td></tr>
-            </tbody></table>
-        </div>;
+                                }
+                    })})})
+                }</Rspan>
+            </td></tr>
+        </tbody></table>;
     }
 
     displayOpponentCards () {
@@ -510,10 +536,10 @@ export class GameSegment extends React.Component {
     }
 }
 
-//todo:
-//1. Try to use `bonds.me`, see this doc for details: https://wiki.parity.io/oo7-Parity-Examples
-//2. Implement codec for some structures. Though they are not actually used, they produce warnings.
-//3. Remove direct state mutation and use `setState()`!
+//todo: Try to use `bonds.me`, see this doc for details: https://wiki.parity.io/oo7-Parity-Examples
+//todo: Implement codec for some structures. Though they are not actually used, they produce warnings.
+//todo: Remove direct state mutation and use `setState()`!
+//todo: implement `any` combinator for bonds, similar to `all`
 
 // const {} = require('oo7-react');
 // const {} = require('oo7-parity');
